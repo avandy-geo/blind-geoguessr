@@ -160,6 +160,8 @@
         #end-screen .card {
             max-width: min(1220px, calc(100vw - 40px));
             font-size: 1.1rem;
+            max-height: calc(100vh - 56px);
+            overflow-y: auto;
         }
 
         .card {
@@ -183,19 +185,25 @@
         .end-layout {
             display: grid;
             grid-template-columns: minmax(400px, 0.86fr) minmax(560px, 1.35fr);
+            grid-template-areas:
+                "score map"
+                "actions actions";
             gap: 16px;
-            align-items: stretch;
-            min-height: min(62vh, 660px);
+            align-items: start;
+            min-height: 0;
         }
 
         .end-score-panel {
+            grid-area: score;
             display: flex;
             flex-direction: column;
             min-width: 0;
         }
 
         .end-map-panel {
+            grid-area: map;
             min-width: 0;
+            height: min(62vh, 660px);
             min-height: 540px;
             display: flex;
         }
@@ -224,8 +232,8 @@
 
         #summary-map {
             width: 100%;
-            height: auto;
-            min-height: 540px;
+            height: 100%;
+            min-height: 0;
             flex: 1;
             border-radius: 8px;
             border: 1px solid var(--border);
@@ -305,7 +313,7 @@
             text-shadow: none;
         }
         
-        .bottom-actions { display: flex; gap: 10px; margin-top: 12px; }
+        .bottom-actions { grid-area: actions; display: flex; gap: 10px; margin-top: 0; flex-shrink: 0; }
         .bottom-actions button { flex: 1; }
 
         .btn {
@@ -371,12 +379,13 @@
 
             .end-map-panel {
                 order: 3;
-                min-height: 46vh;
+                height: 46vh;
+                min-height: 320px;
             }
 
             #summary-map {
-                min-height: 46vh;
-                height: 46vh;
+                height: 100%;
+                min-height: 0;
             }
 
             .round-list {
@@ -456,11 +465,11 @@
                 <div class="end-map-panel">
                     <div id="summary-map"></div>
                 </div>
-            </div>
-            
-            <div class="bottom-actions">
-                <button class="btn btn-share" onclick="shareResults()">Copy Results</button>
-                <button class="btn btn-play" onclick="location.reload()">Play Again</button>
+
+                <div class="bottom-actions">
+                    <button class="btn btn-share" onclick="shareResults()">Copy Results</button>
+                    <button class="btn btn-play" onclick="location.reload()">Play Again</button>
+                </div>
             </div>
         </div>
     </div>

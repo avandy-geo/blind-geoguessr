@@ -614,12 +614,12 @@
         }
         header p {
           font-size: 0.72rem;
-          padding: 0 86px;
+          padding: 0 96px 0 14px;
         }
         .header-action {
-          right: 8px;
-          top: 10px;
-          padding: 7px 8px;
+          right: 6px;
+          top: 6px;
+          padding: 6px 8px;
           font-size: 0.8rem;
         }
         .stats-bar {
@@ -640,15 +640,41 @@
         }
 
         .card-header {
+          display: grid;
+          grid-template-columns: 1fr auto 1fr;
+          align-items: center;
+          gap: 8px;
           margin-bottom: 8px;
           padding-bottom: 8px;
         }
 
         .card-header h2 {
+          grid-column: 2;
           font-size: 1.35rem;
+          margin: 0;
         }
         .card-header p {
           font-size: 0.78rem;
+        }
+
+        .result-player {
+          position: static;
+          grid-column: 1;
+          justify-self: start;
+          top: auto;
+          font-size: 0.95rem;
+          white-space: nowrap;
+        }
+
+        .card-header-action {
+          position: static;
+          grid-column: 3;
+          justify-self: end;
+          top: auto;
+          right: auto;
+          padding: 6px 8px;
+          font-size: 0.82rem;
+          white-space: nowrap;
         }
 
         .end-layout {

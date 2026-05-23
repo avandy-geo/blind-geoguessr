@@ -1,1290 +1,2252 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Blind Geoguessr</title>
-    
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      crossorigin=""
+    />
     <script>
-        window.showLoadError = function(message) {
-            const title = document.getElementById('loading-title');
-            const detail = document.getElementById('loading-detail');
-            const spinner = document.querySelector('#loading-screen .spinner');
-            if (spinner) spinner.style.display = 'none';
-            if (title) title.innerText = 'Loading failed';
-            if (detail) detail.innerText = message || 'Open the browser console for the exact error.';
-        };
+      window.showLoadError = function (message) {
+        const title = document.getElementById("loading-title");
+        const detail = document.getElementById("loading-detail");
+        const spinner = document.querySelector("#loading-screen .spinner");
+        if (spinner) spinner.style.display = "none";
+        if (title) title.innerText = "Loading failed";
+        if (detail)
+          detail.innerText =
+            message || "Open the browser console for the exact error.";
+      };
 
-        window.addEventListener('error', function(event) {
-            window.showLoadError(event.message || 'A script failed to load.');
-        });
+      window.addEventListener("error", function (event) {
+        window.showLoadError(event.message || "A script failed to load.");
+      });
 
-        window.addEventListener('unhandledrejection', function(event) {
-            const reason = event.reason && (event.reason.message || String(event.reason));
-            window.showLoadError(reason || 'A required network request failed.');
-        });
+      window.addEventListener("unhandledrejection", function (event) {
+        const reason =
+          event.reason && (event.reason.message || String(event.reason));
+        window.showLoadError(reason || "A required network request failed.");
+      });
     </script>
-    
+
     <style>
-        :root {
-            --bg: #f4f5f7;
-            --surface: #ffffff;
-            --primary: #ff5252;
-            --primary-hover: #ff1744;
-            --ocean: #00bcd4;
-            --combo: #4caf50;
-            --text: #222222;
-            --text-muted: #666666;
-            --border: #dddddd;
-            --match: #9c27b0;
-        }
+      :root {
+        --bg: #f4f5f7;
+        --surface: #ffffff;
+        --primary: #ff5252;
+        --primary-hover: #ff1744;
+        --ocean: #00bcd4;
+        --combo: #4caf50;
+        --text: #222222;
+        --text-muted: #666666;
+        --border: #dddddd;
+        --match: #9c27b0;
+      }
 
-        * { box-sizing: border-box; }
-        
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
+        background-color: var(--bg);
+        color: var(--text);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin: 0;
+        padding: 0;
+        height: 100vh;
+        overflow: hidden;
+      }
+
+      header {
+        text-align: center;
+        padding: 10px 20px;
+        width: 100%;
+        background: var(--surface);
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        z-index: 1000;
+        position: relative;
+      }
+
+      h1 {
+        margin: 0 0 5px 0;
+        color: var(--text);
+        font-size: 1.5rem;
+      }
+      h1 span {
+        color: var(--primary);
+      }
+      p {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 0.9rem;
+      }
+
+      .header-action {
+        position: absolute;
+        right: 18px;
+        top: 18px;
+        border: 1px solid var(--border);
+        background: #fff;
+        color: var(--text);
+        border-radius: 8px;
+        padding: 8px 12px;
+        font-weight: 800;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      }
+
+      .header-action:hover {
+        border-color: var(--primary);
+        color: var(--primary);
+      }
+
+      .stats-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+        max-width: 800px;
+        margin: 10px auto 0 auto;
+        font-weight: bold;
+        font-size: 1.1rem;
+      }
+
+      .player-stat {
+        color: var(--text);
+      }
+
+      .player-stat span {
+        color: var(--primary);
+      }
+
+      #map {
+        width: 100%;
+        flex-grow: 1;
+        background: #aad3df;
+        cursor: crosshair;
+      }
+
+      .controls {
+        position: absolute;
+        bottom: 30px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1000;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+      }
+
+      button {
+        font-family: inherit;
+      }
+
+      #action-btn {
+        background-color: var(--primary);
+        color: #fff;
+        border: none;
+        padding: 15px 40px;
+        font-size: 1.2rem;
+        font-weight: bold;
+        border-radius: 30px;
+        cursor: pointer;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        transition:
+          transform 0.1s,
+          opacity 0.2s,
+          background-color 0.2s;
+      }
+
+      #action-btn:hover:not(:disabled) {
+        background-color: var(--primary-hover);
+      }
+
+      #action-btn:disabled {
+        background-color: #cccccc;
+        color: #888888;
+        cursor: not-allowed;
+        box-shadow: none;
+        transform: none;
+      }
+
+      #action-btn:active:not(:disabled) {
+        transform: scale(0.95);
+      }
+
+      #round-result {
+        background: rgba(255, 255, 255, 0.95);
+        padding: 15px 25px;
+        border-radius: 8px;
+        font-size: 1.1rem;
+        display: none;
+        backdrop-filter: blur(5px);
+        border: 1px solid var(--border);
+        text-align: center;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+      }
+
+      .round-score-text {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: var(--primary);
+        margin: 5px 0;
+      }
+      .bonus-indicator {
+        font-weight: bold;
+        font-size: 0.9rem;
+        margin-top: 4px;
+      }
+      .bonus-ocean {
+        color: var(--ocean);
+      }
+      .bonus-combo {
+        color: var(--combo);
+      }
+      .bonus-match {
+        color: var(--match);
+      }
+
+      .start-form {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        margin-top: 16px;
+      }
+
+      .start-form input {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px 14px;
+        font-size: 1rem;
+      }
+
+      .start-form input:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(255, 82, 82, 0.18);
+      }
+
+      .start-error {
+        color: var(--primary);
+        min-height: 1.2em;
+        font-weight: 700;
+      }
+
+      .leaderboard-card {
+        max-width: 760px;
+        width: min(760px, calc(100vw - 30px));
+      }
+
+      .leaderboard-top {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        border-bottom: 2px solid var(--border);
+        padding-bottom: 12px;
+        margin-bottom: 16px;
+      }
+
+      .back-btn {
+        position: absolute;
+        left: 0;
+        border: none;
+        background: transparent;
+        color: var(--text);
+        font-size: 1rem;
+        font-weight: 800;
+        cursor: pointer;
+        padding: 8px 4px;
+      }
+
+      .back-btn:hover {
+        color: var(--primary);
+      }
+
+      .leaderboard-table {
+        width: 100%;
+        border-collapse: collapse;
+        text-align: left;
+        font-size: 1rem;
+      }
+
+      .leaderboard-table th,
+      .leaderboard-table td {
+        padding: 12px 10px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .leaderboard-table th {
+        color: var(--text-muted);
+        font-size: 0.8rem;
+        text-transform: uppercase;
+      }
+
+      .leaderboard-table td:first-child,
+      .leaderboard-table th:first-child {
+        width: 76px;
+        text-align: center;
+      }
+
+      .leaderboard-score {
+        text-align: right;
+        color: var(--primary);
+        font-weight: 900;
+      }
+
+      .leaderboard-status {
+        margin-top: 14px;
+        color: var(--text-muted);
+        min-height: 1.3em;
+      }
+
+      .overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(5px);
+        z-index: 2000;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 15px;
+        text-align: center;
+      }
+
+      #end-screen {
+        display: none;
+      }
+
+      #leaderboard-screen {
+        z-index: 3000;
+      }
+
+      #end-screen .card {
+        max-width: min(1220px, calc(100vw - 40px));
+        font-size: 1.1rem;
+        max-height: calc(100vh - 56px);
+        overflow-y: auto;
+      }
+
+      .card {
+        background: var(--surface);
+        padding: 25px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        max-width: 600px;
+        width: 100%;
+        max-height: 95vh;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .card-header {
+        border-bottom: 2px solid var(--border);
+        padding-bottom: 10px;
+        margin-bottom: 10px;
+        position: relative;
+      }
+      .card-header h2 {
+        margin: 0 0 5px 0;
+      }
+      .card-header p {
+        margin: 0;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+      }
+
+      .card-header-action {
+        position: absolute;
+        right: 0;
+        top: 0;
+        border: 1px solid var(--border);
+        background: #fff;
+        color: var(--text);
+        border-radius: 8px;
+        padding: 8px 12px;
+        font-weight: 800;
+        cursor: pointer;
+      }
+
+      .card-header-action:hover {
+        border-color: var(--primary);
+        color: var(--primary);
+      }
+
+      .result-player {
+        position: absolute;
+        left: 0;
+        top: 8px;
+        font-weight: 800;
+      }
+
+      .result-player span {
+        color: var(--primary);
+      }
+
+      .end-layout {
+        display: grid;
+        grid-template-columns: minmax(400px, 0.86fr) minmax(560px, 1.35fr);
+        grid-template-areas:
+          "score map"
+          "actions actions";
+        gap: 16px;
+        align-items: start;
+        min-height: 0;
+      }
+
+      .end-score-panel {
+        grid-area: score;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+
+      .end-map-panel {
+        grid-area: map;
+        min-width: 0;
+        height: min(62vh, 660px);
+        min-height: 540px;
+        display: flex;
+      }
+
+      .round-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-bottom: 12px;
+        text-align: left;
+      }
+
+      .round-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #f8f9fa;
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid #eee;
+        font-size: 1.08rem;
+      }
+
+      .round-info {
+        display: flex;
+        flex-direction: column;
+      }
+      .round-stats {
+        text-align: right;
+        font-weight: bold;
+      }
+
+      #summary-map {
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+        flex: 1;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: #aad3df;
+      }
+
+      .final-calc {
+        background: #222;
+        color: #fff;
+        padding: 12px;
+        border-radius: 8px;
+        margin-bottom: 15px;
+      }
+
+      .final-calc-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 5px;
+        font-size: 1.14rem;
+      }
+      .final-score {
+        font-size: 2.85rem;
+        color: var(--primary);
+        margin: 5px 0 0 0;
+        font-weight: bold;
+        word-break: break-all;
+      }
+      .summary-pin {
+        position: relative;
+        width: 26px;
+        height: 34px;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.72rem;
+        font-weight: 800;
+      }
+      .summary-pin::before {
+        content: "";
+        position: absolute;
+        left: 5px;
+        top: 1px;
+        width: 15px;
+        height: 19px;
+        background: currentColor;
+        clip-path: polygon(0 0, 100% 12%, 84% 54%, 100% 100%, 0 88%);
+        filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.35));
+      }
+      .summary-pin::after {
+        content: "";
+        position: absolute;
+        left: 4px;
+        top: 0;
+        width: 2px;
+        height: 28px;
+        background: #222;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      }
+      .summary-pin span {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        color: #222;
+        text-align: center;
+        line-height: 1;
+        text-shadow: 0 1px 2px #fff;
+      }
+      .summary-pin-guess {
+        color: #4caf50;
+      }
+      .summary-pin-target {
+        color: #ff5252;
+      }
+      .summary-pin-guess {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: #4caf50;
+        color: #fff;
+        border: 2px solid #fff;
+        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.35);
+      }
+      .summary-pin-guess::before,
+      .summary-pin-guess::after {
+        display: none;
+      }
+      .summary-pin-guess span {
+        position: static;
+        color: #fff;
+        text-shadow: none;
+      }
+
+      .bottom-actions {
+        grid-area: actions;
+        display: flex;
+        gap: 10px;
+        margin-top: 0;
+        flex-shrink: 0;
+      }
+      .bottom-actions button {
+        flex: 1;
+      }
+
+      .btn {
+        border: none;
+        padding: 12px 15px;
+        font-size: 1rem;
+        font-weight: bold;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      .btn-share {
+        background-color: #222;
+        color: #fff;
+      }
+      .btn-share:hover {
+        background-color: #000;
+      }
+      .btn-play {
+        background-color: var(--primary);
+        color: #fff;
+      }
+
+      .spinner {
+        border: 4px solid #f3f3f3;
+        border-left-color: var(--primary);
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 20px auto;
+      }
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      @media (max-width: 820px) {
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg);
-            color: var(--text);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            margin: 0;
-            padding: 0;
-            height: 100vh;
-            overflow: hidden;
+          overflow: hidden;
         }
-
         header {
-            text-align: center;
-            padding: 10px 20px;
-            width: 100%;
-            background: var(--surface);
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            z-index: 1000;
+          padding: 8px 10px;
         }
-
-        h1 { margin: 0 0 5px 0; color: var(--text); font-size: 1.5rem; }
-        h1 span { color: var(--primary); }
-        p { margin: 0; color: var(--text-muted); font-size: 0.9rem; }
-
+        h1 {
+          font-size: 1.2rem;
+        }
+        header p {
+          font-size: 0.72rem;
+          padding: 0 86px;
+        }
+        .header-action {
+          right: 8px;
+          top: 10px;
+          padding: 7px 8px;
+          font-size: 0.8rem;
+        }
         .stats-bar {
-            display: flex;
-            justify-content: space-between;
-            width: 100%;
-            max-width: 800px;
-            margin: 10px auto 0 auto;
-            font-weight: bold;
-            font-size: 1.1rem;
+          font-size: 0.9rem;
+          padding: 0 5px;
         }
-
-        #map {
-            width: 100%;
-            flex-grow: 1;
-            background: #aad3df; 
-            cursor: crosshair;
-        }
-
-        .controls {
-            position: absolute;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 1000;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 10px;
-        }
-
-        button { font-family: inherit; }
-
-        #action-btn {
-            background-color: var(--primary);
-            color: #fff;
-            border: none;
-            padding: 15px 40px;
-            font-size: 1.2rem;
-            font-weight: bold;
-            border-radius: 30px;
-            cursor: pointer;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            transition: transform 0.1s, opacity 0.2s, background-color 0.2s;
-        }
-
-        #action-btn:hover:not(:disabled) { background-color: var(--primary-hover); }
-
-        #action-btn:disabled {
-            background-color: #cccccc;
-            color: #888888;
-            cursor: not-allowed;
-            box-shadow: none;
-            transform: none;
-        }
-
-        #action-btn:active:not(:disabled) { transform: scale(0.95); }
-
-        #round-result {
-            background: rgba(255, 255, 255, 0.95);
-            padding: 15px 25px;
-            border-radius: 8px;
-            font-size: 1.1rem;
-            display: none;
-            backdrop-filter: blur(5px);
-            border: 1px solid var(--border);
-            text-align: center;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-        }
-
-        .round-score-text { font-size: 1.5rem; font-weight: bold; color: var(--primary); margin: 5px 0; }
-        .bonus-indicator { font-weight: bold; font-size: 0.90rem; margin-top: 4px; }
-        .bonus-ocean { color: var(--ocean); }
-        .bonus-combo { color: var(--combo); }
-        .bonus-match { color: var(--match); }
-
         .overlay {
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(5px);
-            z-index: 2000;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 15px;
-            text-align: center;
+          padding: 8px;
+          justify-content: flex-start;
         }
 
-        #end-screen { display: none; }
         #end-screen .card {
-            max-width: min(1220px, calc(100vw - 40px));
-            font-size: 1.1rem;
-            max-height: calc(100vh - 56px);
-            overflow-y: auto;
+          width: calc(100vw - 16px);
+          max-width: none;
+          max-height: calc(100vh - 16px);
+          padding: 14px;
+          border-radius: 8px;
         }
 
-        .card {
-            background: var(--surface);
-            padding: 25px;
-            border-radius: 12px;
-            border: 1px solid var(--border);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-            max-width: 600px;
-            width: 100%;
-            max-height: 95vh;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
+        .card-header {
+          margin-bottom: 8px;
+          padding-bottom: 8px;
         }
 
-        .card-header { border-bottom: 2px solid var(--border); padding-bottom: 10px; margin-bottom: 10px;}
-        .card-header h2 { margin: 0 0 5px 0; }
-        .card-header p { margin: 0; font-size: 0.85rem; color: var(--text-muted); }
+        .card-header h2 {
+          font-size: 1.35rem;
+        }
+        .card-header p {
+          font-size: 0.78rem;
+        }
 
         .end-layout {
-            display: grid;
-            grid-template-columns: minmax(400px, 0.86fr) minmax(560px, 1.35fr);
-            grid-template-areas:
-                "score map"
-                "actions actions";
-            gap: 16px;
-            align-items: start;
-            min-height: 0;
+          display: contents;
         }
 
         .end-score-panel {
-            grid-area: score;
-            display: flex;
-            flex-direction: column;
-            min-width: 0;
+          order: 1;
+        }
+
+        .bottom-actions {
+          order: 2;
+          gap: 8px;
+          margin-top: 0;
+          margin-bottom: 10px;
         }
 
         .end-map-panel {
-            grid-area: map;
-            min-width: 0;
-            height: min(62vh, 660px);
-            min-height: 540px;
-            display: flex;
+          order: 3;
+          height: 46vh;
+          min-height: 320px;
+        }
+
+        #summary-map {
+          height: 100%;
+          min-height: 0;
         }
 
         .round-list {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            margin-bottom: 12px;
-            text-align: left;
+          gap: 5px;
+          margin-bottom: 10px;
         }
 
         .round-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: #f8f9fa;
-            padding: 8px 12px;
-            border-radius: 8px;
-            border: 1px solid #eee;
-            font-size: 1.08rem;
-        }
-
-        .round-info { display: flex; flex-direction: column; }
-        .round-stats { text-align: right; font-weight: bold;}
-
-        #summary-map {
-            width: 100%;
-            height: 100%;
-            min-height: 0;
-            flex: 1;
-            border-radius: 8px;
-            border: 1px solid var(--border);
-            background: #aad3df;
+          padding: 7px 9px;
+          font-size: 0.82rem;
         }
 
         .final-calc {
-            background: #222;
-            color: #fff;
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 15px;
+          padding: 10px;
+          margin-bottom: 10px;
         }
 
-        .final-calc-row { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 1.14rem; }
-        .final-score { font-size: 2.85rem; color: var(--primary); margin: 5px 0 0 0; font-weight: bold; word-break: break-all;}
-        .summary-pin {
-            position: relative;
-            width: 26px;
-            height: 34px;
-            color: #fff;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.72rem;
-            font-weight: 800;
+        .final-calc-row {
+          font-size: 0.88rem;
         }
-        .summary-pin::before {
-            content: "";
-            position: absolute;
-            left: 5px;
-            top: 1px;
-            width: 15px;
-            height: 19px;
-            background: currentColor;
-            clip-path: polygon(0 0, 100% 12%, 84% 54%, 100% 100%, 0 88%);
-            filter: drop-shadow(0 1px 3px rgba(0,0,0,0.35));
+        .final-score {
+          font-size: 1.9rem;
         }
-        .summary-pin::after {
-            content: "";
-            position: absolute;
-            left: 4px;
-            top: 0;
-            width: 2px;
-            height: 28px;
-            background: #222;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-        }
-        .summary-pin span {
-            position: absolute;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            color: #222;
-            text-align: center;
-            line-height: 1;
-            text-shadow: 0 1px 2px #fff;
-        }
-        .summary-pin-guess { color: #4caf50; }
-        .summary-pin-target { color: #ff5252; }
-        .summary-pin-guess {
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            background: #4caf50;
-            color: #fff;
-            border: 2px solid #fff;
-            box-shadow: 0 1px 5px rgba(0,0,0,0.35);
-        }
-        .summary-pin-guess::before,
-        .summary-pin-guess::after {
-            display: none;
-        }
-        .summary-pin-guess span {
-            position: static;
-            color: #fff;
-            text-shadow: none;
-        }
-        
-        .bottom-actions { grid-area: actions; display: flex; gap: 10px; margin-top: 0; flex-shrink: 0; }
-        .bottom-actions button { flex: 1; }
 
         .btn {
-            border: none;
-            padding: 12px 15px;
-            font-size: 1rem;
-            font-weight: bold;
-            border-radius: 8px;
-            cursor: pointer;
+          padding: 11px 10px;
+          font-size: 0.95rem;
         }
-        .btn-share { background-color: #222; color: #fff; }
-        .btn-share:hover { background-color: #000; }
-        .btn-play { background-color: var(--primary); color: #fff; }
-
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-left-color: var(--primary);
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px auto;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-        @media (max-width: 820px) {
-            body { overflow: hidden; }
-            .overlay {
-                padding: 8px;
-                justify-content: flex-start;
-            }
-
-            #end-screen .card {
-                width: calc(100vw - 16px);
-                max-width: none;
-                max-height: calc(100vh - 16px);
-                padding: 14px;
-                border-radius: 8px;
-            }
-
-            .card-header {
-                margin-bottom: 8px;
-                padding-bottom: 8px;
-            }
-
-            .card-header h2 { font-size: 1.35rem; }
-            .card-header p { font-size: 0.78rem; }
-
-            .end-layout {
-                display: contents;
-            }
-
-            .end-score-panel {
-                order: 1;
-            }
-
-            .bottom-actions {
-                order: 2;
-                gap: 8px;
-                margin-top: 0;
-                margin-bottom: 10px;
-            }
-
-            .end-map-panel {
-                order: 3;
-                height: 46vh;
-                min-height: 320px;
-            }
-
-            #summary-map {
-                height: 100%;
-                min-height: 0;
-            }
-
-            .round-list {
-                gap: 5px;
-                margin-bottom: 10px;
-            }
-
-            .round-row {
-                padding: 7px 9px;
-                font-size: 0.82rem;
-            }
-
-            .final-calc {
-                padding: 10px;
-                margin-bottom: 10px;
-            }
-
-            .final-calc-row { font-size: 0.88rem; }
-            .final-score { font-size: 1.9rem; }
-
-            .btn {
-                padding: 11px 10px;
-                font-size: 0.95rem;
-            }
-        }
+      }
     </style>
-</head>
-<body>
-
+  </head>
+  <body>
     <header>
-        <h1>Blind <span>Geoguessr</span></h1>
-        <p>Gain more points by being closer. Receive bonusses for guessing the correct continent and/or country.</p>
-        <div class="stats-bar">
-            <div>Round: <span id="round-display">1</span> / 5</div>
-            <div>Score: <span id="score-display">0</span></div>
-        </div>
+      <h1>Blind <span>Geoguessr</span></h1>
+      <p>
+        Gain more points by being closer. Receive bonusses for guessing the
+        correct continent and/or country.
+      </p>
+      <button class="header-action" onclick="showLeaderboard()">
+        Leaderboard 🏆
+      </button>
+      <div class="stats-bar">
+        <div>Round: <span id="round-display">1</span> / 5</div>
+        <div class="player-stat">Player: <span id="player-display">-</span></div>
+        <div>Score: <span id="score-display">0</span></div>
+      </div>
     </header>
 
     <div id="map"></div>
 
     <div class="controls">
-        <div id="round-result"></div>
-        <button id="action-btn" disabled>Place your pin first</button>
+      <div id="round-result"></div>
+      <button id="action-btn" disabled>Place your pin first</button>
     </div>
 
     <div id="loading-screen" class="overlay">
-        <div class="card" style="max-width: 350px;">
-            <div class="spinner"></div>
-            <h2 id="loading-title">Generating World...</h2>
-            <p id="loading-detail">Loading borders, continent polygons & isolation scans...</p>
+      <div class="card" id="username-card" style="max-width: 380px">
+        <h2>Enter your username</h2>
+        <p>This name is used for the leaderboard. No password needed.</p>
+        <form class="start-form" id="username-form">
+          <input
+            id="username-input"
+            maxlength="24"
+            autocomplete="nickname"
+            placeholder="Username"
+            required
+          />
+          <button class="btn btn-play" type="submit">Start Game</button>
+          <div class="start-error" id="username-error"></div>
+        </form>
+      </div>
+
+      <div
+        class="card"
+        id="world-loading-card"
+        style="max-width: 350px; display: none"
+      >
+        <div class="spinner"></div>
+        <h2 id="loading-title">Generating World...</h2>
+        <p id="loading-detail">
+          Loading borders, continent polygons & isolation scans...
+        </p>
+      </div>
+    </div>
+
+    <div id="leaderboard-screen" class="overlay" style="display: none">
+      <div class="card leaderboard-card">
+        <div class="leaderboard-top">
+          <button class="back-btn" onclick="hideLeaderboard()">← Back</button>
+          <h2>Leaderboard 🏆</h2>
         </div>
+        <table class="leaderboard-table">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Player</th>
+              <th class="leaderboard-score">Total Score</th>
+            </tr>
+          </thead>
+          <tbody id="leaderboard-body"></tbody>
+        </table>
+        <p class="leaderboard-status" id="leaderboard-status"></p>
+      </div>
     </div>
 
     <div id="end-screen" class="overlay">
-        <div class="card">
-            <div class="card-header">
-                <h2>Game Over!</h2>
-            </div>
-
-            <div class="end-layout">
-                <div class="end-score-panel">
-                    <div class="round-list" id="round-list-container"></div>
-                    
-                    <div class="final-calc">
-                        <div class="final-calc-row">
-                            <span>Target Points Accumulated:</span>
-                            <span id="final-base">0</span>
-                        </div>
-                        <div class="final-calc-row" style="color: var(--combo); border-bottom: 1px solid #444; padding-bottom: 5px;">
-                            <span>Precision Scaling Combo:</span>
-                            <span id="final-synergy">x1.00</span>
-                        </div>
-                        <div class="final-score" id="final-total">0</div>
-                    </div>
-                </div>
-
-                <div class="end-map-panel">
-                    <div id="summary-map"></div>
-                </div>
-
-                <div class="bottom-actions">
-                    <button class="btn btn-share" onclick="shareResults()">Copy Results</button>
-                    <button class="btn btn-play" onclick="location.reload()">Play Again</button>
-                </div>
-            </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="result-player">Player: <span id="result-player-display">-</span></div>
+          <h2>Game Over!</h2>
+          <button class="card-header-action" onclick="showLeaderboard()">
+            Leaderboard &#127942;
+          </button>
         </div>
+
+        <div class="end-layout">
+          <div class="end-score-panel">
+            <div class="round-list" id="round-list-container"></div>
+
+            <div class="final-calc">
+              <div class="final-calc-row">
+                <span>Target Points Accumulated:</span>
+                <span id="final-base">0</span>
+              </div>
+              <div
+                class="final-calc-row"
+                style="
+                  color: var(--combo);
+                  border-bottom: 1px solid #444;
+                  padding-bottom: 5px;
+                "
+              >
+                <span>Precision Scaling Combo:</span>
+                <span id="final-synergy">x1.00</span>
+              </div>
+              <div class="final-score" id="final-total">0</div>
+            </div>
+          </div>
+
+          <div class="end-map-panel">
+            <div id="summary-map"></div>
+          </div>
+
+          <div class="bottom-actions">
+            <button class="btn btn-share" onclick="shareResults()">
+              Copy Results
+            </button>
+            <button class="btn btn-play" onclick="restartGame()">
+              Play Again
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      crossorigin=""
+    ></script>
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
-    
+
     <script>
-        const COUNTRY_URL = 'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson';
-        const CONTINENTS_URL = 'https://services.arcgis.com/BG6nSlhZSAWtExvp/arcgis/rest/services/Continents/FeatureServer/0/query?where=1%3D1&outFields=CONTINENT&f=geojson';
-        const MACRO_ISOLATION_RADIUS_KM = 2800;
-        const MICRO_ISOLATION_RADIUS_KM = 450;
-        const ISOLATION_SAMPLE_COUNT = 72;
-        const OPEN_OCEAN_BEARING_COUNT = 24;
-        const MIN_MACRO_ISOLATION = 0.35;
-        const MIN_MICRO_ISOLATION = 0.58;
-        // Debug target override. Set to null to go back to fully random targets.
-        const DEBUG_FIRST_TARGET = null;
+      const COUNTRY_URL =
+        "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson";
+      const CONTINENTS_URL =
+        "https://services.arcgis.com/BG6nSlhZSAWtExvp/arcgis/rest/services/Continents/FeatureServer/0/query?where=1%3D1&outFields=CONTINENT&f=geojson";
+      const SUPABASE_URL = "https://jworzkrnwssmbfumktjx.supabase.co";
+      const SUPABASE_ANON_KEY =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp3b3J6a3Jud3NzbWJmdW1rdGp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1NDExMjAsImV4cCI6MjA5NTExNzEyMH0.ExuNduVs1cL5riCF6Yh5Nc63gzd_TimeIY7vYL4faAc";
+      const MACRO_ISOLATION_RADIUS_KM = 2800;
+      const MICRO_ISOLATION_RADIUS_KM = 450;
+      const ISOLATION_SAMPLE_COUNT = 72;
+      const OPEN_OCEAN_BEARING_COUNT = 24;
+      const MIN_MACRO_ISOLATION = 0.35;
+      const MIN_MICRO_ISOLATION = 0.58;
+      // Debug target override. Set to null to go back to fully random targets.
+      const DEBUG_FIRST_TARGET = null;
 
-        let worldGeoJSON = null;
-        let continentGeoJSON = null;
-        let validCountriesGlobal = [];
-        let continentFeatures = [];
-        const targets = [];
-        let currentRound = 0; 
-        let rawTotalScore = 0;
-        let globalSynergy = 1.0;
-        let continentComboCount = 0;
-        let countryComboCount = 0;
-        let roundData = [];
-        let gameState = 'guessing'; 
+      let worldGeoJSON = null;
+      let continentGeoJSON = null;
+      let validCountriesGlobal = [];
+      let continentFeatures = [];
+      const targets = [];
+      let currentRound = 0;
+      let rawTotalScore = 0;
+      let globalSynergy = 1.0;
+      let continentComboCount = 0;
+      let countryComboCount = 0;
+      let roundData = [];
+      let gameState = "starting";
+      let playerName = "";
+      let usernameSubmitted = false;
+      let worldReady = false;
+      let summaryMapInstance = null;
 
-        const START_ZOOM = window.innerWidth < 700 ? 2 : 3;
-        const map = L.map('map', {
-            center: [20, 0], zoom: START_ZOOM, minZoom: 2,
-            maxBounds: [[-90, -180], [90, 180]], maxBoundsViscosity: 1.0
-        });
+      const START_ZOOM = window.innerWidth < 700 ? 2 : 3;
+      const map = L.map("map", {
+        center: [20, 0],
+        zoom: START_ZOOM,
+        minZoom: 2,
+        maxBounds: [
+          [-90, -180],
+          [90, 180],
+        ],
+        maxBoundsViscosity: 1.0,
+      });
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap', maxZoom: 19, noWrap: true
-        }).addTo(map);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap",
+        maxZoom: 19,
+        noWrap: true,
+      }).addTo(map);
 
-        let userMarker = null;
-        let targetMarker = null;
-        let polyline = null;
-        let reviewLineUpdateHandler = null;
+      let userMarker = null;
+      let targetMarker = null;
+      let polyline = null;
+      let reviewLineUpdateHandler = null;
 
-        const actionBtn = document.getElementById('action-btn');
-        const roundDisplay = document.getElementById('round-display');
-        const scoreDisplay = document.getElementById('score-display');
-        const roundResult = document.getElementById('round-result');
+      const actionBtn = document.getElementById("action-btn");
+      const roundDisplay = document.getElementById("round-display");
+      const scoreDisplay = document.getElementById("score-display");
+      const playerDisplay = document.getElementById("player-display");
+      const resultPlayerDisplay = document.getElementById(
+        "result-player-display",
+      );
+      const roundResult = document.getElementById("round-result");
+      const usernameForm = document.getElementById("username-form");
+      const usernameInput = document.getElementById("username-input");
+      const usernameError = document.getElementById("username-error");
+      const usernameCard = document.getElementById("username-card");
+      const worldLoadingCard = document.getElementById("world-loading-card");
+      const leaderboardBody = document.getElementById("leaderboard-body");
+      const leaderboardStatus = document.getElementById("leaderboard-status");
 
-        const guessIcon = L.icon({
-            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
-            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-            iconSize: [25, 41],
-            iconAnchor: [12, 41],
-            popupAnchor: [1, -34],
-            shadowSize: [41, 41]
-        });
+      usernameInput.value = playerName;
+      updatePlayerDisplays();
+      usernameInput.addEventListener("input", function () {
+        usernameInput.value = cleanPlayerName(usernameInput.value);
+      });
 
-        const targetFlagIcon = L.divIcon({
-            className: '',
-            html: '<div class="summary-pin summary-pin-target"><span></span></div>',
-            iconSize: [28, 36],
-            iconAnchor: [5, 28]
-        });
+      const guessIcon = L.icon({
+        iconUrl:
+          "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
+        shadowUrl:
+          "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowSize: [41, 41],
+      });
 
-        window.addEventListener('keydown', function(e) {
-            if (e.key === " " || e.keyCode === 32) {
-                if (!actionBtn.disabled && document.getElementById('end-screen').style.display !== 'flex') {
-                    e.preventDefault(); 
-                    actionBtn.click();
-                }
-            }
-        });
+      const targetFlagIcon = L.divIcon({
+        className: "",
+        html: '<div class="summary-pin summary-pin-target"><span></span></div>',
+        iconSize: [28, 36],
+        iconAnchor: [5, 28],
+      });
 
-        function getFeatureAtPoint(latlng) {
-            let pt = turf.point([latlng.lng, latlng.lat]);
-            for (let feature of worldGeoJSON.features) {
-                let b = feature.bbox;
-                if(latlng.lng >= b[0] && latlng.lng <= b[2] && latlng.lat >= b[1] && latlng.lat <= b[3]) {
-                    if (turf.booleanPointInPolygon(pt, feature)) {
-                        return feature;
-                    }
-                }
-            }
-            return null;
+      window.addEventListener("keydown", function (e) {
+        if (e.key === " " || e.keyCode === 32) {
+          if (
+            !actionBtn.disabled &&
+            document.getElementById("end-screen").style.display !== "flex"
+          ) {
+            e.preventDefault();
+            actionBtn.click();
+          }
+        }
+      });
+
+      usernameForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+        const cleanedName = cleanPlayerName(usernameInput.value);
+        if (!cleanedName) {
+          usernameError.innerText = "Pick a name with 2-24 letters or numbers.";
+          return;
         }
 
-        function normalizeContinentName(name) {
-            if (!name) return null;
-            const raw = String(name).trim().toLowerCase();
-            const aliases = {
-                africa: 'Africa',
-                antarctica: 'Antarctica',
-                asia: 'Asia',
-                europe: 'Europe',
-                oceania: 'Oceania',
-                australia: 'Oceania',
-                'australia/oceania': 'Oceania',
-                'north america': 'North America',
-                north_america: 'North America',
-                'south america': 'South America',
-                south_america: 'South America'
-            };
-            return aliases[raw] || name;
+        playerName = cleanedName;
+        usernameSubmitted = true;
+        usernameError.innerText = "";
+        updatePlayerDisplays();
+        finishStartWhenReady();
+      });
+
+      function cleanPlayerName(value) {
+        return String(value || "")
+          .trim()
+          .replace(/\s+/g, " ")
+          .replace(/[^\w .-]/g, "")
+          .toLowerCase()
+          .slice(0, 24);
+      }
+
+      function updatePlayerDisplays() {
+        const shownName = playerName || "-";
+        playerDisplay.innerText = shownName;
+        resultPlayerDisplay.innerText = shownName;
+      }
+
+      function finishStartWhenReady() {
+        usernameCard.style.display = "none";
+        if (!worldReady) {
+          worldLoadingCard.style.display = "block";
+          return;
         }
 
-        function featureContinentName(feature) {
-            if (!feature || !feature.properties) return null;
-            return normalizeContinentName(
-                feature.properties.CONTINENT ||
-                feature.properties.continent ||
-                feature.properties.CONTINENT_NAME ||
-                feature.properties.name ||
-                feature.properties.NAME
+        document.getElementById("loading-screen").style.display = "none";
+        gameState = "guessing";
+      }
+
+      function getFeatureAtPoint(latlng) {
+        let pt = turf.point([latlng.lng, latlng.lat]);
+        for (let feature of worldGeoJSON.features) {
+          let b = feature.bbox;
+          if (
+            latlng.lng >= b[0] &&
+            latlng.lng <= b[2] &&
+            latlng.lat >= b[1] &&
+            latlng.lat <= b[3]
+          ) {
+            if (turf.booleanPointInPolygon(pt, feature)) {
+              return feature;
+            }
+          }
+        }
+        return null;
+      }
+
+      function normalizeContinentName(name) {
+        if (!name) return null;
+        const raw = String(name).trim().toLowerCase();
+        const aliases = {
+          africa: "Africa",
+          antarctica: "Antarctica",
+          asia: "Asia",
+          europe: "Europe",
+          oceania: "Oceania",
+          australia: "Oceania",
+          "australia/oceania": "Oceania",
+          "north america": "North America",
+          north_america: "North America",
+          "south america": "South America",
+          south_america: "South America",
+        };
+        return aliases[raw] || name;
+      }
+
+      function featureContinentName(feature) {
+        if (!feature || !feature.properties) return null;
+        return normalizeContinentName(
+          feature.properties.CONTINENT ||
+            feature.properties.continent ||
+            feature.properties.CONTINENT_NAME ||
+            feature.properties.name ||
+            feature.properties.NAME,
+        );
+      }
+
+      function getCountryCode(feature) {
+        if (!feature || !feature.properties) return null;
+        return (
+          feature.properties.ADM0_A3 ||
+          feature.properties.ISO_A3 ||
+          feature.properties.SOV_A3 ||
+          null
+        );
+      }
+
+      function getPointAdjustedCountryContinent(latlng, countryFeature) {
+        const code = getCountryCode(countryFeature);
+        const fallback = featureContinentName(countryFeature);
+
+        // Natural Earth assigns one continent per country. These point checks fix the cases
+        // where a country genuinely crosses the usual Europe/Asia or Africa/Asia boundary.
+        if (code === "RUS") return latlng.lng < 60 ? "Europe" : "Asia";
+        if (code === "TUR") return latlng.lng < 29.8 ? "Europe" : "Asia";
+        if (code === "KAZ")
+          return latlng.lng < 60 && latlng.lat > 45 ? "Europe" : "Asia";
+        if (code === "EGY")
+          return latlng.lng > 32 && latlng.lat > 28 ? "Asia" : "Africa";
+        if (code === "AZE" || code === "GEO")
+          return latlng.lat > 42 ? "Europe" : "Asia";
+
+        return fallback;
+      }
+
+      function getContinentAtPoint(latlng, fallbackCountryFeature = null) {
+        const adjustedCountryContinent = getPointAdjustedCountryContinent(
+          latlng,
+          fallbackCountryFeature,
+        );
+        if (adjustedCountryContinent) {
+          return adjustedCountryContinent;
+        }
+
+        const pt = turf.point([latlng.lng, latlng.lat]);
+        for (let feature of continentFeatures) {
+          const b = feature.bbox;
+          if (
+            latlng.lng >= b[0] &&
+            latlng.lng <= b[2] &&
+            latlng.lat >= b[1] &&
+            latlng.lat <= b[3]
+          ) {
+            if (turf.booleanPointInPolygon(pt, feature)) {
+              return featureContinentName(feature);
+            }
+          }
+        }
+        return adjustedCountryContinent;
+      }
+
+      function samplePointAround(lat, lng, radiusKm) {
+        const bearing = Math.random() * 360;
+        const distance = Math.sqrt(Math.random()) * radiusKm;
+        const destination = turf.destination(
+          turf.point([lng, lat]),
+          distance,
+          bearing,
+          { units: "kilometers" },
+        );
+        const coords = destination.geometry.coordinates;
+        return { lng: coords[0], lat: coords[1] };
+      }
+
+      function calculateOceanPercentage(
+        lat,
+        lng,
+        radiusKm = MACRO_ISOLATION_RADIUS_KM,
+        samples = ISOLATION_SAMPLE_COUNT,
+      ) {
+        let waterCount = 0;
+        for (let i = 0; i < samples; i++) {
+          const sample = samplePointAround(lat, lng, radiusKm);
+          const pt = turf.point([sample.lng, sample.lat]);
+          let isLand = false;
+
+          for (let c of validCountriesGlobal) {
+            let b = c.bbox;
+            if (
+              sample.lng >= b[0] &&
+              sample.lng <= b[2] &&
+              sample.lat >= b[1] &&
+              sample.lat <= b[3]
+            ) {
+              if (turf.booleanPointInPolygon(pt, c)) {
+                isLand = true;
+                break;
+              }
+            }
+          }
+          if (!isLand) waterCount++;
+        }
+        return waterCount / samples;
+      }
+
+      function calculateIsolationProfile(lat, lng) {
+        const macro = calculateOceanPercentage(
+          lat,
+          lng,
+          MACRO_ISOLATION_RADIUS_KM,
+          ISOLATION_SAMPLE_COUNT,
+        );
+        const micro = calculateOceanPercentage(
+          lat,
+          lng,
+          MICRO_ISOLATION_RADIUS_KM,
+          ISOLATION_SAMPLE_COUNT,
+        );
+        const nearWater = calculateNearbyWaterAccess(lat, lng);
+        const openOcean = calculateOpenOceanExposure(lat, lng) * nearWater;
+
+        return {
+          macro,
+          micro,
+          openOcean,
+          nearWater,
+        };
+      }
+
+      function calculateNearbyWaterAccess(lat, lng) {
+        const distancesKm = [80, 180, 360];
+        let bestAccess = 0;
+
+        for (let i = 0; i < OPEN_OCEAN_BEARING_COUNT; i++) {
+          const bearing = i * (360 / OPEN_OCEAN_BEARING_COUNT);
+          let waterHits = 0;
+
+          distancesKm.forEach((distanceKm) => {
+            const destination = turf.destination(
+              turf.point([lng, lat]),
+              distanceKm,
+              bearing,
+              { units: "kilometers" },
             );
-        }
-
-        function getCountryCode(feature) {
-            if (!feature || !feature.properties) return null;
-            return feature.properties.ADM0_A3 || feature.properties.ISO_A3 || feature.properties.SOV_A3 || null;
-        }
-
-        function getPointAdjustedCountryContinent(latlng, countryFeature) {
-            const code = getCountryCode(countryFeature);
-            const fallback = featureContinentName(countryFeature);
-
-            // Natural Earth assigns one continent per country. These point checks fix the cases
-            // where a country genuinely crosses the usual Europe/Asia or Africa/Asia boundary.
-            if (code === 'RUS') return latlng.lng < 60 ? 'Europe' : 'Asia';
-            if (code === 'TUR') return latlng.lng < 29.8 ? 'Europe' : 'Asia';
-            if (code === 'KAZ') return latlng.lng < 60 && latlng.lat > 45 ? 'Europe' : 'Asia';
-            if (code === 'EGY') return latlng.lng > 32 && latlng.lat > 28 ? 'Asia' : 'Africa';
-            if (code === 'AZE' || code === 'GEO') return latlng.lat > 42 ? 'Europe' : 'Asia';
-
-            return fallback;
-        }
-
-        function getContinentAtPoint(latlng, fallbackCountryFeature = null) {
-            const adjustedCountryContinent = getPointAdjustedCountryContinent(latlng, fallbackCountryFeature);
-            if (adjustedCountryContinent) {
-                return adjustedCountryContinent;
-            }
-
-            const pt = turf.point([latlng.lng, latlng.lat]);
-            for (let feature of continentFeatures) {
-                const b = feature.bbox;
-                if (latlng.lng >= b[0] && latlng.lng <= b[2] && latlng.lat >= b[1] && latlng.lat <= b[3]) {
-                    if (turf.booleanPointInPolygon(pt, feature)) {
-                        return featureContinentName(feature);
-                    }
-                }
-            }
-            return adjustedCountryContinent;
-        }
-
-        function samplePointAround(lat, lng, radiusKm) {
-            const bearing = Math.random() * 360;
-            const distance = Math.sqrt(Math.random()) * radiusKm;
-            const destination = turf.destination(turf.point([lng, lat]), distance, bearing, { units: 'kilometers' });
             const coords = destination.geometry.coordinates;
-            return { lng: coords[0], lat: coords[1] };
+            if (!isLandAt(coords[1], coords[0])) waterHits += 1;
+          });
+
+          bestAccess = Math.max(bestAccess, waterHits / distancesKm.length);
         }
 
-        function calculateOceanPercentage(lat, lng, radiusKm = MACRO_ISOLATION_RADIUS_KM, samples = ISOLATION_SAMPLE_COUNT) {
-            let waterCount = 0;
-            for(let i = 0; i < samples; i++) {
-                const sample = samplePointAround(lat, lng, radiusKm);
-                const pt = turf.point([sample.lng, sample.lat]);
-                let isLand = false;
+        return bestAccess;
+      }
 
-                for(let c of validCountriesGlobal) {
-                    let b = c.bbox;
-                    if(sample.lng >= b[0] && sample.lng <= b[2] && sample.lat >= b[1] && sample.lat <= b[3]) {
-                        if(turf.booleanPointInPolygon(pt, c)) { 
-                            isLand = true;
-                            break; 
-                        }
-                    }
-                }
-                if(!isLand) waterCount++;
-            }
-            return waterCount / samples;
+      function calculateOpenOceanExposure(lat, lng) {
+        const rayScores = [];
+        for (let i = 0; i < OPEN_OCEAN_BEARING_COUNT; i++) {
+          const bearing = i * (360 / OPEN_OCEAN_BEARING_COUNT);
+          rayScores.push(calculateOpenOceanRay(lat, lng, bearing));
         }
+        rayScores.sort((a, b) => b - a);
+        const strongestRayCount = Math.max(
+          1,
+          Math.round(OPEN_OCEAN_BEARING_COUNT / 4),
+        );
+        const strongestRays = rayScores.slice(0, strongestRayCount);
+        return (
+          strongestRays.reduce((sum, score) => sum + score, 0) /
+          strongestRays.length
+        );
+      }
 
-        function calculateIsolationProfile(lat, lng) {
-            const macro = calculateOceanPercentage(lat, lng, MACRO_ISOLATION_RADIUS_KM, ISOLATION_SAMPLE_COUNT);
-            const micro = calculateOceanPercentage(lat, lng, MICRO_ISOLATION_RADIUS_KM, ISOLATION_SAMPLE_COUNT);
-            const nearWater = calculateNearbyWaterAccess(lat, lng);
-            const openOcean = calculateOpenOceanExposure(lat, lng) * nearWater;
+      function calculateOpenOceanRay(lat, lng, bearing) {
+        const distancesKm = [300, 900, 1800, 3400, 5400];
+        let waterCount = 0;
+        let farWaterCount = 0;
 
-            return {
-                macro,
-                micro,
-                openOcean,
-                nearWater
-            };
-        }
-
-        function calculateNearbyWaterAccess(lat, lng) {
-            const distancesKm = [80, 180, 360];
-            let bestAccess = 0;
-
-            for (let i = 0; i < OPEN_OCEAN_BEARING_COUNT; i++) {
-                const bearing = i * (360 / OPEN_OCEAN_BEARING_COUNT);
-                let waterHits = 0;
-
-                distancesKm.forEach(distanceKm => {
-                    const destination = turf.destination(turf.point([lng, lat]), distanceKm, bearing, { units: 'kilometers' });
-                    const coords = destination.geometry.coordinates;
-                    if (!isLandAt(coords[1], coords[0])) waterHits += 1;
-                });
-
-                bestAccess = Math.max(bestAccess, waterHits / distancesKm.length);
-            }
-
-            return bestAccess;
-        }
-
-        function calculateOpenOceanExposure(lat, lng) {
-            const rayScores = [];
-            for (let i = 0; i < OPEN_OCEAN_BEARING_COUNT; i++) {
-                const bearing = i * (360 / OPEN_OCEAN_BEARING_COUNT);
-                rayScores.push(calculateOpenOceanRay(lat, lng, bearing));
-            }
-            rayScores.sort((a, b) => b - a);
-            const strongestRayCount = Math.max(1, Math.round(OPEN_OCEAN_BEARING_COUNT / 4));
-            const strongestRays = rayScores.slice(0, strongestRayCount);
-            return strongestRays.reduce((sum, score) => sum + score, 0) / strongestRays.length;
-        }
-
-        function calculateOpenOceanRay(lat, lng, bearing) {
-            const distancesKm = [300, 900, 1800, 3400, 5400];
-            let waterCount = 0;
-            let farWaterCount = 0;
-
-            distancesKm.forEach((distanceKm, index) => {
-                const destination = turf.destination(turf.point([lng, lat]), distanceKm, bearing, { units: 'kilometers' });
-                const coords = destination.geometry.coordinates;
-                const isWater = !isLandAt(coords[1], coords[0]);
-                if (isWater) {
-                    waterCount += 1;
-                    if (index >= 2) farWaterCount += 1;
-                }
-            });
-
-            const corridorScore = waterCount / distancesKm.length;
-            const farOceanScore = farWaterCount / 3;
-            const trueOceanBonus = farWaterCount >= 2 ? 1 : 0.35;
-            return corridorScore * farOceanScore * trueOceanBonus;
-        }
-
-        function isLandAt(lat, lng) {
-            const pt = turf.point([lng, lat]);
-            for(let c of validCountriesGlobal) {
-                let b = c.bbox;
-                if(lng >= b[0] && lng <= b[2] && lat >= b[1] && lat <= b[3]) {
-                    if(turf.booleanPointInPolygon(pt, c)) {
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
-
-        function calculateIsolationBonus(targetIsolation, guessIsolation, distanceKm, targetContinent, guessContinent) {
-            let targetMacro = targetIsolation.macro;
-            const targetMicro = targetIsolation.micro;
-            let targetOpenOcean = targetIsolation.openOcean || 0;
-            const guessMacro = guessIsolation.macro;
-            const guessMicro = guessIsolation.micro;
-            const guessOpenOcean = guessIsolation.openOcean || 0;
-            const isEuropeanTarget = targetContinent === 'Europe';
-            const isLikelyIsland = targetMicro > 0.72 && targetMacro > 0.45;
-
-            if (isEuropeanTarget && !isLikelyIsland) {
-                targetMacro = Math.min(targetMacro, 0.42);
-                targetOpenOcean *= 0.28;
-            }
-
-            const targetCoastal = Math.min(targetMacro, 0.55);
-            const coastalScore = Math.max(targetCoastal, targetOpenOcean * 0.85);
-            const islandScore = smoothstep(MIN_MICRO_ISOLATION, 0.9, targetMicro) * smoothstep(0.42, 0.78, Math.max(targetMacro, targetOpenOcean));
-            const openOceanScore = smoothstep(0.28, 0.78, targetOpenOcean);
-            const guessCoastalContext = Math.max(Math.min(guessMacro, 0.55), guessOpenOcean * 0.9, guessMicro * 0.55);
-            const sameIsolationRegion = targetContinent && guessContinent && targetContinent === guessContinent;
-            const guessContextFloor = sameIsolationRegion ? 0.28 : 0.14;
-            const guessContextGate = guessContextFloor + (1 - guessContextFloor) * smoothstep(0.22, 0.72, guessCoastalContext);
-
-            const coastalGate = calculateDistanceGate(distanceKm, 500, 3300);
-            const openOceanGate = calculateDistanceGate(distanceKm, 700, 4200);
-            const islandGate = calculateDistanceGate(distanceKm, 180, 1250);
-
-            const coastalBonus = coastalScore > MIN_MACRO_ISOLATION
-                ? Math.min(0.26, coastalScore * 0.34) * coastalGate * guessContextGate
-                : 0;
-
-            const openOceanBonus = targetOpenOcean > 0.28
-                ? openOceanScore * 0.62 * openOceanGate * guessContextGate
-                : 0;
-
-            const islandBonus = islandScore > 0
-                ? islandScore * 2.8 * islandGate * Math.max(0.45, guessContextGate)
-                : 0;
-
-            const macroBonus = coastalBonus + openOceanBonus;
-            const microBonus = islandBonus;
-            const isolationStrength = Math.max(coastalScore, targetOpenOcean, islandScore);
-
-            return {
-                multiplier: 1 + macroBonus + microBonus,
-                macroBonus,
-                microBonus,
-                coastalBonus,
-                openOceanBonus,
-                islandBonus,
-                macroGate: Math.max(coastalGate, openOceanGate),
-                microGate: islandGate,
-                isolationStrength,
-                openOcean: targetOpenOcean,
-                guessContextGate,
-                isEuropeanDampened: isEuropeanTarget && !isLikelyIsland
-            };
-        }
-
-        function calculateDistanceGate(distanceKm, fullDistanceKm, zeroDistanceKm) {
-            if (distanceKm <= fullDistanceKm) return 1;
-            if (distanceKm >= zeroDistanceKm) return 0;
-
-            const progress = (distanceKm - fullDistanceKm) / (zeroDistanceKm - fullDistanceKm);
-            return 1 - (progress * progress * (3 - 2 * progress));
-        }
-
-        function smoothstep(edge0, edge1, value) {
-            const t = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
-            return t * t * (3 - 2 * t);
-        }
-
-        function lerp(start, end, amount) {
-            return start + (end - start) * amount;
-        }
-
-        function createSummaryIcon(roundNumber, type) {
-            const isGuess = type === 'guess';
-            return L.divIcon({
-                className: '',
-                html: `<div class="summary-pin summary-pin-${type}"><span>${roundNumber}</span></div>`,
-                iconSize: isGuess ? [28, 28] : [28, 36],
-                iconAnchor: isGuess ? [14, 14] : [5, 28]
-            });
-        }
-
-        function getTrimmedLineForMarkers(mapInstance, startLatLng, endLatLng, startTrimPx = 15, endTrimPx = 8) {
-            const startPoint = mapInstance.latLngToLayerPoint(startLatLng);
-            const endPoint = mapInstance.latLngToLayerPoint(endLatLng);
-            const dx = endPoint.x - startPoint.x;
-            const dy = endPoint.y - startPoint.y;
-            const length = Math.hypot(dx, dy);
-
-            if (length <= startTrimPx + endTrimPx + 2) return [startLatLng, endLatLng];
-
-            const unitX = dx / length;
-            const unitY = dy / length;
-            const trimmedStart = L.point(
-                startPoint.x + unitX * startTrimPx,
-                startPoint.y + unitY * startTrimPx
-            );
-            const trimmedEnd = L.point(
-                endPoint.x - unitX * endTrimPx,
-                endPoint.y - unitY * endTrimPx
-            );
-
-            return [
-                mapInstance.layerPointToLatLng(trimmedStart),
-                mapInstance.layerPointToLatLng(trimmedEnd)
-            ];
-        }
-
-        function calculateRoundCombo(distanceKm, continentMatch, countryMatch) {
-            const precisionCombo = distanceKm < 2500 ? (2500 - distanceKm) / 1000 : 0;
-            let continentCombo = 0;
-            let countryCombo = 0;
-
-            if (continentMatch) {
-                continentComboCount += 1;
-                continentCombo = 0.22 * Math.pow(1.45, continentComboCount - 1);
-            }
-
-            if (countryMatch) {
-                countryComboCount += 1;
-                countryCombo = 0.85 * Math.pow(2.15, countryComboCount - 1);
-            }
-
-            return {
-                total: precisionCombo + continentCombo + countryCombo,
-                precision: precisionCombo,
-                continent: continentCombo,
-                country: countryCombo,
-                continentCount: continentComboCount,
-                countryCount: countryComboCount
-            };
-        }
-
-        async function initGame() {
-            try {
-                const [countryResponse, continentResponse] = await Promise.all([
-                    fetch(COUNTRY_URL),
-                    fetch(CONTINENTS_URL).catch(() => null)
-                ]);
-                worldGeoJSON = await countryResponse.json();
-                if (continentResponse && continentResponse.ok) {
-                    continentGeoJSON = await continentResponse.json();
-                    continentFeatures = continentGeoJSON.features
-                        .map(feature => ({ ...feature, bbox: turf.bbox(feature) }))
-                        .filter(feature => featureContinentName(feature) !== 'Antarctica');
-                }
-                
-                validCountriesGlobal = worldGeoJSON.features.filter(f => f.properties.CONTINENT !== 'Antarctica' && f.properties.CONTINENT !== null);
-
-                let totalWorldArea = 0;
-                validCountriesGlobal.forEach(c => {
-                    c.bbox = turf.bbox(c);
-                    c.properties.trueArea = turf.area(c);
-                    totalWorldArea += c.properties.trueArea;
-                });
-
-                if (DEBUG_FIRST_TARGET) {
-                    const debugLatLng = L.latLng(DEBUG_FIRST_TARGET.lat, DEBUG_FIRST_TARGET.lng);
-                    const debugCountry = getFeatureAtPoint(debugLatLng);
-                    targets.push({
-                        latLng: debugLatLng,
-                        isolation: calculateIsolationProfile(DEBUG_FIRST_TARGET.lat, DEBUG_FIRST_TARGET.lng),
-                        continent: getContinentAtPoint(debugLatLng, debugCountry),
-                        countryFeature: debugCountry
-                    });
-                }
-
-                while(targets.length < 5) {
-                    let randomVal = Math.random() * totalWorldArea;
-                    let areaSum = 0;
-                    let selectedCountry = null;
-
-                    for (let c of validCountriesGlobal) {
-                        areaSum += c.properties.trueArea;
-                        if (randomVal <= areaSum) { selectedCountry = c; break; }
-                    }
-
-                    let bbox = selectedCountry.bbox;
-                    let lat = 0, lng = 0, found = false;
-
-                    for (let attempt = 0; attempt < 100; attempt++) {
-                        lng = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
-                        lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
-                        let pt = turf.point([lng, lat]);
-
-                        if (turf.booleanPointInPolygon(pt, selectedCountry)) {
-                            found = true;
-                            break;
-                        }
-                    }
-
-                    if (found) {
-                        const targetLatLng = L.latLng(lat, lng);
-                        targets.push({
-                            latLng: targetLatLng,
-                            isolation: calculateIsolationProfile(lat, lng),
-                            continent: getContinentAtPoint(targetLatLng, selectedCountry),
-                            countryFeature: selectedCountry
-                        });
-                    }
-                }
-            } catch (e) {
-                console.error("Vector fetching failed.", e);
-                if (!window.L || !window.turf) {
-                    window.showLoadError('Leaflet or Turf did not load. Check that the CDN scripts are reachable from this page.');
-                    return;
-                }
-                const backups = [ [39.8, -98.5], [-14.2, -51.9], [60.1, 100.3], [-25.2, 133.7], [15.2, 19.3] ];
-                for(let i=0; i<5; i++) {
-                    targets.push({
-                        latLng: L.latLng(backups[i][0], backups[i][1]),
-                        isolation: { macro: 0, micro: 0, openOcean: 0, nearWater: 0 },
-                        continent: null,
-                        countryFeature: null
-                    });
-                }
-            }
-            document.getElementById('loading-screen').style.display = 'none';
-        }
-
-        map.on('click', function(e) {
-            if (gameState !== 'guessing') return;
-            if (!userMarker) {
-                userMarker = L.marker(e.latlng, {icon: guessIcon}).addTo(map);
-                actionBtn.innerText = "Confirm Guess (Space)";
-                actionBtn.disabled = false;
-            } else {
-                userMarker.setLatLng(e.latlng);
-            }
+        distancesKm.forEach((distanceKm, index) => {
+          const destination = turf.destination(
+            turf.point([lng, lat]),
+            distanceKm,
+            bearing,
+            { units: "kilometers" },
+          );
+          const coords = destination.geometry.coordinates;
+          const isWater = !isLandAt(coords[1], coords[0]);
+          if (isWater) {
+            waterCount += 1;
+            if (index >= 2) farWaterCount += 1;
+          }
         });
 
-        actionBtn.addEventListener('click', () => {
-            if (gameState === 'guessing') processGuess();
-            else if (gameState === 'review') nextRound();
+        const corridorScore = waterCount / distancesKm.length;
+        const farOceanScore = farWaterCount / 3;
+        const trueOceanBonus = farWaterCount >= 2 ? 1 : 0.35;
+        return corridorScore * farOceanScore * trueOceanBonus;
+      }
+
+      function isLandAt(lat, lng) {
+        const pt = turf.point([lng, lat]);
+        for (let c of validCountriesGlobal) {
+          let b = c.bbox;
+          if (lng >= b[0] && lng <= b[2] && lat >= b[1] && lat <= b[3]) {
+            if (turf.booleanPointInPolygon(pt, c)) {
+              return true;
+            }
+          }
+        }
+        return false;
+      }
+
+      function calculateIsolationBonus(
+        targetIsolation,
+        guessIsolation,
+        distanceKm,
+        targetContinent,
+        guessContinent,
+      ) {
+        let targetMacro = targetIsolation.macro;
+        const targetMicro = targetIsolation.micro;
+        let targetOpenOcean = targetIsolation.openOcean || 0;
+        const guessMacro = guessIsolation.macro;
+        const guessMicro = guessIsolation.micro;
+        const guessOpenOcean = guessIsolation.openOcean || 0;
+        const isEuropeanTarget = targetContinent === "Europe";
+        const isLikelyIsland = targetMicro > 0.72 && targetMacro > 0.45;
+
+        if (isEuropeanTarget && !isLikelyIsland) {
+          targetMacro = Math.min(targetMacro, 0.42);
+          targetOpenOcean *= 0.28;
+        }
+
+        const targetCoastal = Math.min(targetMacro, 0.55);
+        const coastalScore = Math.max(targetCoastal, targetOpenOcean * 0.85);
+        const islandScore =
+          smoothstep(MIN_MICRO_ISOLATION, 0.9, targetMicro) *
+          smoothstep(0.42, 0.78, Math.max(targetMacro, targetOpenOcean));
+        const openOceanScore = smoothstep(0.28, 0.78, targetOpenOcean);
+        const guessCoastalContext = Math.max(
+          Math.min(guessMacro, 0.55),
+          guessOpenOcean * 0.9,
+          guessMicro * 0.55,
+        );
+        const sameIsolationRegion =
+          targetContinent &&
+          guessContinent &&
+          targetContinent === guessContinent;
+        const guessContextFloor = sameIsolationRegion ? 0.28 : 0.14;
+        const guessContextGate =
+          guessContextFloor +
+          (1 - guessContextFloor) * smoothstep(0.22, 0.72, guessCoastalContext);
+
+        const coastalGate = calculateDistanceGate(distanceKm, 500, 3300);
+        const openOceanGate = calculateDistanceGate(distanceKm, 700, 4200);
+        const islandGate = calculateDistanceGate(distanceKm, 180, 1250);
+
+        const coastalBonus =
+          coastalScore > MIN_MACRO_ISOLATION
+            ? Math.min(0.26, coastalScore * 0.34) *
+              coastalGate *
+              guessContextGate
+            : 0;
+
+        const openOceanBonus =
+          targetOpenOcean > 0.28
+            ? openOceanScore * 0.62 * openOceanGate * guessContextGate
+            : 0;
+
+        const islandBonus =
+          islandScore > 0
+            ? islandScore * 2.8 * islandGate * Math.max(0.45, guessContextGate)
+            : 0;
+
+        const macroBonus = coastalBonus + openOceanBonus;
+        const microBonus = islandBonus;
+        const isolationStrength = Math.max(
+          coastalScore,
+          targetOpenOcean,
+          islandScore,
+        );
+
+        return {
+          multiplier: 1 + macroBonus + microBonus,
+          macroBonus,
+          microBonus,
+          coastalBonus,
+          openOceanBonus,
+          islandBonus,
+          macroGate: Math.max(coastalGate, openOceanGate),
+          microGate: islandGate,
+          isolationStrength,
+          openOcean: targetOpenOcean,
+          guessContextGate,
+          isEuropeanDampened: isEuropeanTarget && !isLikelyIsland,
+        };
+      }
+
+      function calculateDistanceGate(
+        distanceKm,
+        fullDistanceKm,
+        zeroDistanceKm,
+      ) {
+        if (distanceKm <= fullDistanceKm) return 1;
+        if (distanceKm >= zeroDistanceKm) return 0;
+
+        const progress =
+          (distanceKm - fullDistanceKm) / (zeroDistanceKm - fullDistanceKm);
+        return 1 - progress * progress * (3 - 2 * progress);
+      }
+
+      function smoothstep(edge0, edge1, value) {
+        const t = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
+        return t * t * (3 - 2 * t);
+      }
+
+      function lerp(start, end, amount) {
+        return start + (end - start) * amount;
+      }
+
+      function createSummaryIcon(roundNumber, type) {
+        const isGuess = type === "guess";
+        return L.divIcon({
+          className: "",
+          html: `<div class="summary-pin summary-pin-${type}"><span>${roundNumber}</span></div>`,
+          iconSize: isGuess ? [28, 28] : [28, 36],
+          iconAnchor: isGuess ? [14, 14] : [5, 28],
+        });
+      }
+
+      function getTrimmedLineForMarkers(
+        mapInstance,
+        startLatLng,
+        endLatLng,
+        startTrimPx = 15,
+        endTrimPx = 8,
+      ) {
+        const startPoint = mapInstance.latLngToLayerPoint(startLatLng);
+        const endPoint = mapInstance.latLngToLayerPoint(endLatLng);
+        const dx = endPoint.x - startPoint.x;
+        const dy = endPoint.y - startPoint.y;
+        const length = Math.hypot(dx, dy);
+
+        if (length <= startTrimPx + endTrimPx + 2)
+          return [startLatLng, endLatLng];
+
+        const unitX = dx / length;
+        const unitY = dy / length;
+        const trimmedStart = L.point(
+          startPoint.x + unitX * startTrimPx,
+          startPoint.y + unitY * startTrimPx,
+        );
+        const trimmedEnd = L.point(
+          endPoint.x - unitX * endTrimPx,
+          endPoint.y - unitY * endTrimPx,
+        );
+
+        return [
+          mapInstance.layerPointToLatLng(trimmedStart),
+          mapInstance.layerPointToLatLng(trimmedEnd),
+        ];
+      }
+
+      function calculateRoundCombo(distanceKm, continentMatch, countryMatch) {
+        const precisionCombo =
+          distanceKm < 2500 ? (2500 - distanceKm) / 1000 : 0;
+        let continentCombo = 0;
+        let countryCombo = 0;
+
+        if (continentMatch) {
+          continentComboCount += 1;
+          continentCombo = 0.22 * Math.pow(1.45, continentComboCount - 1);
+        }
+
+        if (countryMatch) {
+          countryComboCount += 1;
+          countryCombo = 0.85 * Math.pow(2.15, countryComboCount - 1);
+        }
+
+        return {
+          total: precisionCombo + continentCombo + countryCombo,
+          precision: precisionCombo,
+          continent: continentCombo,
+          country: countryCombo,
+          continentCount: continentComboCount,
+          countryCount: countryComboCount,
+        };
+      }
+
+      async function initGame() {
+        try {
+          const [countryResponse, continentResponse] = await Promise.all([
+            fetch(COUNTRY_URL),
+            fetch(CONTINENTS_URL).catch(() => null),
+          ]);
+          worldGeoJSON = await countryResponse.json();
+          if (continentResponse && continentResponse.ok) {
+            continentGeoJSON = await continentResponse.json();
+            continentFeatures = continentGeoJSON.features
+              .map((feature) => ({ ...feature, bbox: turf.bbox(feature) }))
+              .filter(
+                (feature) => featureContinentName(feature) !== "Antarctica",
+              );
+          }
+
+          validCountriesGlobal = worldGeoJSON.features.filter(
+            (f) =>
+              f.properties.CONTINENT !== "Antarctica" &&
+              f.properties.CONTINENT !== null,
+          );
+
+          let totalWorldArea = 0;
+          validCountriesGlobal.forEach((c) => {
+            c.bbox = turf.bbox(c);
+            c.properties.trueArea = turf.area(c);
+            totalWorldArea += c.properties.trueArea;
+          });
+
+          if (DEBUG_FIRST_TARGET) {
+            const debugLatLng = L.latLng(
+              DEBUG_FIRST_TARGET.lat,
+              DEBUG_FIRST_TARGET.lng,
+            );
+            const debugCountry = getFeatureAtPoint(debugLatLng);
+            targets.push({
+              latLng: debugLatLng,
+              isolation: calculateIsolationProfile(
+                DEBUG_FIRST_TARGET.lat,
+                DEBUG_FIRST_TARGET.lng,
+              ),
+              continent: getContinentAtPoint(debugLatLng, debugCountry),
+              countryFeature: debugCountry,
+            });
+          }
+
+          while (targets.length < 5) {
+            let randomVal = Math.random() * totalWorldArea;
+            let areaSum = 0;
+            let selectedCountry = null;
+
+            for (let c of validCountriesGlobal) {
+              areaSum += c.properties.trueArea;
+              if (randomVal <= areaSum) {
+                selectedCountry = c;
+                break;
+              }
+            }
+
+            let bbox = selectedCountry.bbox;
+            let lat = 0,
+              lng = 0,
+              found = false;
+
+            for (let attempt = 0; attempt < 100; attempt++) {
+              lng = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
+              lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
+              let pt = turf.point([lng, lat]);
+
+              if (turf.booleanPointInPolygon(pt, selectedCountry)) {
+                found = true;
+                break;
+              }
+            }
+
+            if (found) {
+              const targetLatLng = L.latLng(lat, lng);
+              targets.push({
+                latLng: targetLatLng,
+                isolation: calculateIsolationProfile(lat, lng),
+                continent: getContinentAtPoint(targetLatLng, selectedCountry),
+                countryFeature: selectedCountry,
+              });
+            }
+          }
+        } catch (e) {
+          console.error("Vector fetching failed.", e);
+          if (!window.L || !window.turf) {
+            window.showLoadError(
+              "Leaflet or Turf did not load. Check that the CDN scripts are reachable from this page.",
+            );
+            return;
+          }
+          const backups = [
+            [39.8, -98.5],
+            [-14.2, -51.9],
+            [60.1, 100.3],
+            [-25.2, 133.7],
+            [15.2, 19.3],
+          ];
+          for (let i = 0; i < 5; i++) {
+            targets.push({
+              latLng: L.latLng(backups[i][0], backups[i][1]),
+              isolation: { macro: 0, micro: 0, openOcean: 0, nearWater: 0 },
+              continent: null,
+              countryFeature: null,
+            });
+          }
+        }
+        worldReady = true;
+        if (usernameSubmitted) {
+          finishStartWhenReady();
+        }
+      }
+
+      map.on("click", function (e) {
+        if (gameState !== "guessing") return;
+        if (!userMarker) {
+          userMarker = L.marker(e.latlng, { icon: guessIcon }).addTo(map);
+          actionBtn.innerText = "Confirm Guess (Space)";
+          actionBtn.disabled = false;
+        } else {
+          userMarker.setLatLng(e.latlng);
+        }
+      });
+
+      actionBtn.addEventListener("click", () => {
+        if (gameState === "guessing") processGuess();
+        else if (gameState === "review") nextRound();
+      });
+
+      function processGuess() {
+        gameState = "review";
+        const guess = userMarker.getLatLng();
+        const targetData = targets[currentRound];
+        const distanceKm = guess.distanceTo(targetData.latLng) / 1000;
+
+        let targetFeature = targetData.countryFeature;
+        let guessFeature = getFeatureAtPoint(guess);
+
+        let countryMatch = false;
+        let continentMatch = false;
+        let targetContinent =
+          targetData.continent ||
+          getContinentAtPoint(targetData.latLng, targetFeature);
+        let guessContinent = guessFeature
+          ? getContinentAtPoint(guess, guessFeature)
+          : null;
+
+        if (targetFeature && guessFeature) {
+          const tName = targetFeature.properties.NAME || "target_name_null";
+          const gName = guessFeature.properties.NAME || "guess_name_null";
+
+          if (tName === gName && tName !== "target_name_null") {
+            countryMatch = true;
+            continentMatch = true;
+          } else if (
+            targetContinent &&
+            guessContinent &&
+            targetContinent === guessContinent
+          ) {
+            continentMatch = true;
+          }
+        }
+
+        let asymptoteScore = 1000000 / (distanceKm + 1);
+        let regionalBoost = 25000 * Math.exp(-distanceKm / 1000);
+        let baseScoreAccumulator = asymptoteScore + regionalBoost;
+
+        let geoMultiplier = 1.0;
+        if (countryMatch) {
+          baseScoreAccumulator += 10000;
+          geoMultiplier += 2.0 * Math.exp(-distanceKm / 1500);
+        } else if (continentMatch) {
+          baseScoreAccumulator += 2000;
+          geoMultiplier += 0.5 * Math.exp(-distanceKm / 3000);
+        }
+        let multipliedPoints = baseScoreAccumulator * geoMultiplier;
+
+        const guessIsolation = calculateIsolationProfile(guess.lat, guess.lng);
+        const isolationBonus = calculateIsolationBonus(
+          targetData.isolation,
+          guessIsolation,
+          distanceKm,
+          targetContinent,
+          guessContinent,
+        );
+        let appliedIsolationBonus = isolationBonus.multiplier;
+
+        let roundScore = Math.floor(multipliedPoints * appliedIsolationBonus);
+        rawTotalScore += roundScore;
+
+        const roundCombo = calculateRoundCombo(
+          distanceKm,
+          continentMatch,
+          countryMatch,
+        );
+        let roundSynergyBoost = roundCombo.total;
+        const roundShareCombo =
+          roundCombo.precision +
+          (continentMatch ? 0.22 : 0) +
+          (countryMatch ? 0.85 : 0) +
+          Math.max(0, appliedIsolationBonus - 1);
+        globalSynergy += roundSynergyBoost;
+
+        roundData.push({
+          guessLatLng: guess,
+          targetLatLng: targetData.latLng,
+          dist: distanceKm,
+          score: roundScore,
+          appliedIsolation: appliedIsolationBonus,
+          targetMacroIsolation: targetData.isolation.macro,
+          targetMicroIsolation: targetData.isolation.micro,
+          targetOpenOcean: targetData.isolation.openOcean || 0,
+          guessMacroIsolation: guessIsolation.macro,
+          guessMicroIsolation: guessIsolation.micro,
+          guessOpenOcean: guessIsolation.openOcean || 0,
+          countryMatched: countryMatch,
+          continentMatched: continentMatch,
+          targetCountry: targetFeature
+            ? targetFeature.properties.NAME || ""
+            : "",
+          guessCountry: guessFeature ? guessFeature.properties.NAME || "" : "",
+          targetContinent: targetContinent || "",
+          guessContinent: guessContinent || "",
+          comboAdded: roundSynergyBoost,
+          shareComboAdded: roundShareCombo,
+          precisionComboAdded: roundCombo.precision,
+          continentComboAdded: roundCombo.continent,
+          countryComboAdded: roundCombo.country,
+          continentComboCount: roundCombo.continentCount,
+          countryComboCount: roundCombo.countryCount,
         });
 
-        function processGuess() {
-            gameState = 'review';
-            const guess = userMarker.getLatLng();
-            const targetData = targets[currentRound];
-            const distanceKm = guess.distanceTo(targetData.latLng) / 1000;
+        targetMarker = L.marker(targetData.latLng, {
+          icon: targetFlagIcon,
+        }).addTo(map);
+        const reviewBounds = L.latLngBounds([guess, targetData.latLng]);
+        if (reviewLineUpdateHandler) {
+          map.off("zoomend moveend", reviewLineUpdateHandler);
+        }
+        reviewLineUpdateHandler = () => {
+          const linePoints = getTrimmedLineForMarkers(
+            map,
+            guess,
+            targetData.latLng,
+            16,
+            8,
+          );
+          if (polyline) {
+            polyline.setLatLngs(linePoints);
+          } else {
+            polyline = L.polyline(linePoints, {
+              color: "#ff5252",
+              dashArray: "10, 10",
+              weight: 3,
+            }).addTo(map);
+          }
+        };
+        reviewLineUpdateHandler();
+        map.on("zoomend moveend", reviewLineUpdateHandler);
+        map.fitBounds(reviewBounds, { padding: [50, 50] });
 
-            let targetFeature = targetData.countryFeature;
-            let guessFeature = getFeatureAtPoint(guess);
+        scoreDisplay.innerText = Math.floor(
+          rawTotalScore * globalSynergy,
+        ).toLocaleString();
 
-            let countryMatch = false;
-            let continentMatch = false;
-            let targetContinent = targetData.continent || getContinentAtPoint(targetData.latLng, targetFeature);
-            let guessContinent = guessFeature ? getContinentAtPoint(guess, guessFeature) : null;
+        let resultHtml = `You were <strong>${Math.round(distanceKm).toLocaleString()} km</strong> away.<br>`;
+        resultHtml += `<div class="round-score-text">+${roundScore.toLocaleString()} pts</div>`;
 
-            if (targetFeature && guessFeature) {
-                const tName = targetFeature.properties.NAME || "target_name_null";
-                const gName = guessFeature.properties.NAME || "guess_name_null";
-
-                if (tName === gName && tName !== "target_name_null") {
-                    countryMatch = true;
-                    continentMatch = true; 
-                } else if (targetContinent && guessContinent && targetContinent === guessContinent) {
-                    continentMatch = true;
-                }
-            }
-
-            let asymptoteScore = 1000000 / (distanceKm + 1);
-            let regionalBoost = 25000 * Math.exp(-distanceKm / 1000);
-            let baseScoreAccumulator = asymptoteScore + regionalBoost;
-
-            let geoMultiplier = 1.0;
-            if (countryMatch) {
-                baseScoreAccumulator += 10000; 
-                geoMultiplier += 2.0 * Math.exp(-distanceKm / 1500); 
-            } else if (continentMatch) {
-                baseScoreAccumulator += 2000; 
-                geoMultiplier += 0.5 * Math.exp(-distanceKm / 3000); 
-            }
-            let multipliedPoints = baseScoreAccumulator * geoMultiplier;
-
-            const guessIsolation = calculateIsolationProfile(guess.lat, guess.lng);
-            const isolationBonus = calculateIsolationBonus(targetData.isolation, guessIsolation, distanceKm, targetContinent, guessContinent);
-            let appliedIsolationBonus = isolationBonus.multiplier;
-
-            let roundScore = Math.floor(multipliedPoints * appliedIsolationBonus);
-            rawTotalScore += roundScore;
-
-            const roundCombo = calculateRoundCombo(distanceKm, continentMatch, countryMatch);
-            let roundSynergyBoost = roundCombo.total;
-            globalSynergy += roundSynergyBoost;
-
-            roundData.push({ 
-                guessLatLng: guess,
-                targetLatLng: targetData.latLng,
-                dist: distanceKm, 
-                score: roundScore, 
-                appliedIsolation: appliedIsolationBonus,
-                targetMacroIsolation: targetData.isolation.macro,
-                targetMicroIsolation: targetData.isolation.micro,
-                targetOpenOcean: targetData.isolation.openOcean || 0,
-                guessMacroIsolation: guessIsolation.macro,
-                guessMicroIsolation: guessIsolation.micro,
-                guessOpenOcean: guessIsolation.openOcean || 0,
-                countryMatched: countryMatch,
-                continentMatched: continentMatch,
-                comboAdded: roundSynergyBoost,
-                precisionComboAdded: roundCombo.precision,
-                continentComboAdded: roundCombo.continent,
-                countryComboAdded: roundCombo.country,
-                continentComboCount: roundCombo.continentCount,
-                countryComboCount: roundCombo.countryCount
-            });
-
-            targetMarker = L.marker(targetData.latLng, {icon: targetFlagIcon}).addTo(map);
-            const reviewBounds = L.latLngBounds([guess, targetData.latLng]);
-            if (reviewLineUpdateHandler) {
-                map.off('zoomend moveend', reviewLineUpdateHandler);
-            }
-            reviewLineUpdateHandler = () => {
-                const linePoints = getTrimmedLineForMarkers(map, guess, targetData.latLng, 16, 8);
-                if (polyline) {
-                    polyline.setLatLngs(linePoints);
-                } else {
-                    polyline = L.polyline(linePoints, {color: '#ff5252', dashArray: '10, 10', weight: 3}).addTo(map);
-                }
-            };
-            reviewLineUpdateHandler();
-            map.on('zoomend moveend', reviewLineUpdateHandler);
-            map.fitBounds(reviewBounds, { padding: [50, 50] });
-
-            scoreDisplay.innerText = Math.floor(rawTotalScore * globalSynergy).toLocaleString();
-
-            let resultHtml = `You were <strong>${Math.round(distanceKm).toLocaleString()} km</strong> away.<br>`;
-            resultHtml += `<div class="round-score-text">+${roundScore.toLocaleString()} pts</div>`;
-            
-            if (countryMatch) {
-                resultHtml += `<div class="bonus-indicator bonus-match">Country Match! (+10K Base)</div>`;
-            } else if (continentMatch) {
-                resultHtml += `<div class="bonus-indicator bonus-match">Continent Match! (+2K Base)</div>`;
-            }
-
-            if (appliedIsolationBonus > 1.05) {
-                const isolationPct = Math.round(Math.min(0.99, isolationBonus.isolationStrength) * 100);
-                const openOceanPct = Math.round(Math.min(0.99, isolationBonus.openOcean || 0) * 100);
-                const microText = isolationBonus.microBonus > 0.05
-                    ? ` + island x${(1 + isolationBonus.microBonus).toFixed(2)}`
-                    : '';
-                const oceanText = openOceanPct >= 20 ? `, ${openOceanPct}% open-ocean exposure` : '';
-                const contextText = isolationBonus.guessContextGate < 0.55 ? `, inland guess reduced` : '';
-                resultHtml += `<div class="bonus-indicator bonus-ocean">Isolation Bonus: ${isolationPct}% isolation${oceanText}${contextText} (x${appliedIsolationBonus.toFixed(2)}${microText})</div>`;
-            }
-            
-            if (roundSynergyBoost > 0) {
-                const comboParts = [];
-                if (roundCombo.precision > 0) comboParts.push(`precision +${roundCombo.precision.toFixed(2)}`);
-                if (roundCombo.continent > 0) comboParts.push(`continent +${roundCombo.continent.toFixed(2)}`);
-                if (roundCombo.country > 0) comboParts.push(`country +${roundCombo.country.toFixed(2)}`);
-                resultHtml += `<div class="bonus-indicator bonus-combo">+${roundSynergyBoost.toFixed(2)} Combo (${comboParts.join(', ')})</div>`;
-            }
-
-            roundResult.innerHTML = resultHtml;
-            roundResult.style.display = 'block';
-
-            actionBtn.innerText = (currentRound < 4) ? "Next Round (Space)" : "See Final Results (Space)";
+        if (countryMatch) {
+          resultHtml += `<div class="bonus-indicator bonus-match">Country Match! (+10K Base)</div>`;
+        } else if (continentMatch) {
+          resultHtml += `<div class="bonus-indicator bonus-match">Continent Match! (+2K Base)</div>`;
         }
 
-        function nextRound() {
-            if (currentRound === 4) {
-                showEndScreen();
-                return;
-            }
-
-            currentRound++;
-            gameState = 'guessing';
-            
-            if (reviewLineUpdateHandler) {
-                map.off('zoomend moveend', reviewLineUpdateHandler);
-                reviewLineUpdateHandler = null;
-            }
-            map.removeLayer(userMarker);
-            map.removeLayer(targetMarker);
-            map.removeLayer(polyline);
-            userMarker = null; targetMarker = null; polyline = null;
-
-            map.setView([20, 0], START_ZOOM);
-            
-            roundDisplay.innerText = currentRound + 1;
-            roundResult.style.display = 'none';
-            actionBtn.innerText = "Place your pin first";
-            actionBtn.disabled = true;
+        if (appliedIsolationBonus > 1.05) {
+          const isolationPct = Math.round(
+            Math.min(0.99, isolationBonus.isolationStrength) * 100,
+          );
+          const openOceanPct = Math.round(
+            Math.min(0.99, isolationBonus.openOcean || 0) * 100,
+          );
+          const microText =
+            isolationBonus.microBonus > 0.05
+              ? ` + island x${(1 + isolationBonus.microBonus).toFixed(2)}`
+              : "";
+          const oceanText =
+            openOceanPct >= 20 ? `, ${openOceanPct}% open-ocean exposure` : "";
+          const contextText =
+            isolationBonus.guessContextGate < 0.55
+              ? `, inland guess reduced`
+              : "";
+          resultHtml += `<div class="bonus-indicator bonus-ocean">Isolation Bonus: ${isolationPct}% isolation${oceanText}${contextText} (x${appliedIsolationBonus.toFixed(2)}${microText})</div>`;
         }
 
-        function showEndScreen() {
-            const listContainer = document.getElementById('round-list-container');
-            listContainer.innerHTML = '';
+        if (roundSynergyBoost > 0) {
+          const comboParts = [];
+          if (roundCombo.precision > 0)
+            comboParts.push(`precision +${roundCombo.precision.toFixed(2)}`);
+          if (roundCombo.continent > 0)
+            comboParts.push(`continent +${roundCombo.continent.toFixed(2)}`);
+          if (roundCombo.country > 0)
+            comboParts.push(`country +${roundCombo.country.toFixed(2)}`);
+          resultHtml += `<div class="bonus-indicator bonus-combo">+${roundSynergyBoost.toFixed(2)} Combo (${comboParts.join(", ")})</div>`;
+        }
 
-            roundData.forEach((r, idx) => {
-                let matchText = "";
-                if (r.countryMatched) matchText = `<span style="font-size:0.75rem; color:var(--match);">Country Match (+10K)</span>`;
-                else if (r.continentMatched) matchText = `<span style="font-size:0.75rem; color:var(--match);">Continent Match (+2K)</span>`;
+        roundResult.innerHTML = resultHtml;
+        roundResult.style.display = "block";
 
-                listContainer.innerHTML += `
+        actionBtn.innerText =
+          currentRound < 4 ? "Next Round (Space)" : "See Final Results (Space)";
+      }
+
+      function nextRound() {
+        if (currentRound === 4) {
+          showEndScreen();
+          return;
+        }
+
+        currentRound++;
+        gameState = "guessing";
+
+        if (reviewLineUpdateHandler) {
+          map.off("zoomend moveend", reviewLineUpdateHandler);
+          reviewLineUpdateHandler = null;
+        }
+        map.removeLayer(userMarker);
+        map.removeLayer(targetMarker);
+        map.removeLayer(polyline);
+        userMarker = null;
+        targetMarker = null;
+        polyline = null;
+
+        map.setView([20, 0], START_ZOOM);
+
+        roundDisplay.innerText = currentRound + 1;
+        roundResult.style.display = "none";
+        actionBtn.innerText = "Place your pin first";
+        actionBtn.disabled = true;
+      }
+
+      function showEndScreen() {
+        const listContainer = document.getElementById("round-list-container");
+        listContainer.innerHTML = "";
+
+        roundData.forEach((r, idx) => {
+          let matchText = "";
+          if (r.countryMatched)
+            matchText = `<span style="font-size:0.75rem; color:var(--match);">Country Match (+10K)</span>`;
+          else if (r.continentMatched)
+            matchText = `<span style="font-size:0.75rem; color:var(--match);">Continent Match (+2K)</span>`;
+
+          listContainer.innerHTML += `
                     <div class="round-row">
                         <div class="round-info">
                             <strong>Round ${idx + 1}</strong>
                             <span style="color:#666;">${Math.round(r.dist).toLocaleString()} km</span>
                             ${matchText}
-                            ${r.appliedIsolation > 1.05 ? `<span style="font-size:0.8rem; color:var(--ocean);">x${r.appliedIsolation.toFixed(2)} Isolation Mult</span>` : ''}
-                            ${r.continentComboAdded > 0 ? `<span style="font-size:0.8rem; color:var(--combo);">Continent Combo #${r.continentComboCount}: +${r.continentComboAdded.toFixed(2)}</span>` : ''}
-                            ${r.countryComboAdded > 0 ? `<span style="font-size:0.8rem; color:var(--combo);">Country Combo #${r.countryComboCount}: +${r.countryComboAdded.toFixed(2)}</span>` : ''}
+                            ${r.appliedIsolation > 1.05 ? `<span style="font-size:0.8rem; color:var(--ocean);">x${r.appliedIsolation.toFixed(2)} Isolation Multi</span>` : ""}
+                            ${r.continentComboAdded > 0 ? `<span style="font-size:0.8rem; color:var(--combo);">Continent Combo #${r.continentComboCount}: +${r.continentComboAdded.toFixed(2)}</span>` : ""}
+                            ${r.countryComboAdded > 0 ? `<span style="font-size:0.8rem; color:var(--combo);">Country Combo #${r.countryComboCount}: +${r.countryComboAdded.toFixed(2)}</span>` : ""}
                         </div>
                         <div class="round-stats">
                             <div style="color:var(--primary);">+${r.score.toLocaleString()} pts</div>
-                            ${r.comboAdded > 0 ? `<div style="font-size:0.85rem; color:var(--combo);">+${r.comboAdded.toFixed(2)} Combo</div>` : ''}
+                            ${r.comboAdded > 0 ? `<div style="font-size:0.85rem; color:var(--combo);">+${r.comboAdded.toFixed(2)} Combo</div>` : ""}
                         </div>
                     </div>
                 `;
+        });
+
+        const finalScore = Math.floor(rawTotalScore * globalSynergy);
+
+        document.getElementById("final-base").innerText =
+          rawTotalScore.toLocaleString();
+        document.getElementById("final-synergy").innerText =
+          `x${globalSynergy.toFixed(2)}`;
+        document.getElementById("final-total").innerText =
+          finalScore.toLocaleString();
+        document.getElementById("end-screen").style.display = "flex";
+        submitLeaderboardScore(finalScore);
+
+        setTimeout(() => {
+          const summaryMapEl = document.getElementById("summary-map");
+          if (summaryMapInstance) {
+            summaryMapInstance.remove();
+            summaryMapInstance = null;
+          }
+          summaryMapEl.innerHTML = "";
+
+          const summaryMap = L.map("summary-map", {
+            center: [20, 0],
+            zoom: 1,
+            minZoom: 0,
+            zoomSnap: 0.25,
+            zoomControl: true,
+            worldCopyJump: false,
+            maxBounds: [
+              [-85, -180],
+              [85, 180],
+            ],
+            maxBoundsViscosity: 1.0,
+          });
+          summaryMapInstance = summaryMap;
+          summaryMap.createPane("summaryLines");
+          summaryMap.getPane("summaryLines").style.zIndex = 350;
+          summaryMap.createPane("summaryMarkers");
+          summaryMap.getPane("summaryMarkers").style.zIndex = 650;
+
+          L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            noWrap: true,
+          }).addTo(summaryMap);
+
+          const summaryBounds = [];
+          const summaryLines = [];
+          roundData.forEach((r, idx) => {
+            const roundNumber = idx + 1;
+            const line = L.polyline(
+              getTrimmedLineForMarkers(
+                summaryMap,
+                r.guessLatLng,
+                r.targetLatLng,
+                15,
+                8,
+              ),
+              {
+                color: "#ff5252",
+                weight: 2,
+                dashArray: "5,5",
+                pane: "summaryLines",
+              },
+            ).addTo(summaryMap);
+            summaryLines.push({
+              line,
+              guessLatLng: r.guessLatLng,
+              targetLatLng: r.targetLatLng,
             });
+            L.marker(r.guessLatLng, {
+              icon: createSummaryIcon(roundNumber, "guess"),
+              pane: "summaryMarkers",
+              zIndexOffset: 1000,
+            }).addTo(summaryMap);
+            L.marker(r.targetLatLng, {
+              icon: createSummaryIcon(roundNumber, "target"),
+              pane: "summaryMarkers",
+              zIndexOffset: 1000,
+            }).addTo(summaryMap);
+            summaryBounds.push(r.guessLatLng);
+            summaryBounds.push(r.targetLatLng);
+          });
 
-            const finalScore = Math.floor(rawTotalScore * globalSynergy);
-            
-            document.getElementById('final-base').innerText = rawTotalScore.toLocaleString();
-            document.getElementById('final-synergy').innerText = `x${globalSynergy.toFixed(2)}`;
-            document.getElementById('final-total').innerText = finalScore.toLocaleString();
-            document.getElementById('end-screen').style.display = 'flex';
+          const updateSummaryLines = () => {
+            summaryLines.forEach(({ line, guessLatLng, targetLatLng }) => {
+              line.setLatLngs(
+                getTrimmedLineForMarkers(
+                  summaryMap,
+                  guessLatLng,
+                  targetLatLng,
+                  15,
+                  8,
+                ),
+              );
+            });
+          };
+          summaryMap.on("zoomend moveend", updateSummaryLines);
+          const fitSummaryMap = () => {
+            summaryMap.invalidateSize();
+            if (summaryBounds.length > 0) {
+              const isMobileSummary = window.innerWidth <= 820;
+              summaryMap.fitBounds(summaryBounds, {
+                padding: isMobileSummary ? [10, 10] : [70, 70],
+                maxZoom: isMobileSummary ? 4.75 : 5,
+                animate: false,
+              });
+              if (isMobileSummary) {
+                summaryMap.setZoom(Math.min(4.75, summaryMap.getZoom() + 0.5), {
+                  animate: false,
+                });
+                summaryMap.panInsideBounds(
+                  [
+                    [-85, -180],
+                    [85, 180],
+                  ],
+                  { animate: false },
+                );
+              }
+            }
+            updateSummaryLines();
+          };
 
+          requestAnimationFrame(() => {
+            fitSummaryMap();
             setTimeout(() => {
-                const summaryMapEl = document.getElementById('summary-map');
-                summaryMapEl.innerHTML = '';
+              fitSummaryMap();
+            }, 250);
+          });
+        }, 200);
+      }
 
-                const summaryMap = L.map('summary-map', {
-                    center: [20, 0],
-                    zoom: 1,
-                    minZoom: 0,
-                    zoomSnap: 0.25,
-                    zoomControl: true,
-                    worldCopyJump: false,
-                    maxBounds: [[-85, -180], [85, 180]],
-                    maxBoundsViscosity: 1.0
-                });
-                summaryMap.createPane('summaryLines');
-                summaryMap.getPane('summaryLines').style.zIndex = 350;
-                summaryMap.createPane('summaryMarkers');
-                summaryMap.getPane('summaryMarkers').style.zIndex = 650;
+      function shareResults() {
+        let grid = "";
+        roundData.forEach((r) => {
+          if (r.dist < 50) grid += "🟪";
+          else if (r.dist < 600) grid += "🟩";
+          else if (r.dist < 1500) grid += "🟨";
+          else if (r.dist < 2500) grid += "🟧";
+          else grid += "⬛";
+        });
 
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { noWrap: true }).addTo(summaryMap);
+        const finalScore = Math.floor(rawTotalScore * globalSynergy);
 
-                const summaryBounds = [];
-                const summaryLines = [];
-                roundData.forEach((r, idx) => {
-                    const roundNumber = idx + 1;
-                    const line = L.polyline(getTrimmedLineForMarkers(summaryMap, r.guessLatLng, r.targetLatLng, 15, 8), {color: '#ff5252', weight: 2, dashArray: '5,5', pane: 'summaryLines'}).addTo(summaryMap);
-                    summaryLines.push({ line, guessLatLng: r.guessLatLng, targetLatLng: r.targetLatLng });
-                    L.marker(r.guessLatLng, {icon: createSummaryIcon(roundNumber, 'guess'), pane: 'summaryMarkers', zIndexOffset: 1000}).addTo(summaryMap);
-                    L.marker(r.targetLatLng, {icon: createSummaryIcon(roundNumber, 'target'), pane: 'summaryMarkers', zIndexOffset: 1000}).addTo(summaryMap);
-                    summaryBounds.push(r.guessLatLng);
-                    summaryBounds.push(r.targetLatLng);
-                });
+        const shareText =
+          `Blind Geoguessr\n` +
+          `${grid}\n` +
+          `Base Points: ${rawTotalScore.toLocaleString()}\n` +
+          `Synergy Combo: x${globalSynergy.toFixed(2)}\n` +
+          `Final Score: ${finalScore.toLocaleString()}\n` +
+          `Play here: https://avandy-geo.github.io/blind-geoguessr/\n`;
 
-                const updateSummaryLines = () => {
-                    summaryLines.forEach(({ line, guessLatLng, targetLatLng }) => {
-                        line.setLatLngs(getTrimmedLineForMarkers(summaryMap, guessLatLng, targetLatLng, 15, 8));
-                    });
-                };
-                summaryMap.on('zoomend moveend', updateSummaryLines);
-                const fitSummaryMap = () => {
-                    summaryMap.invalidateSize();
-                    if (summaryBounds.length > 0) {
-                        const isMobileSummary = window.innerWidth <= 820;
-                        summaryMap.fitBounds(summaryBounds, {
-                            padding: isMobileSummary ? [10, 10] : [70, 70],
-                            maxZoom: isMobileSummary ? 4.75 : 5,
-                            animate: false
-                        });
-                        if (isMobileSummary) {
-                            summaryMap.setZoom(Math.min(4.75, summaryMap.getZoom() + 0.5), { animate: false });
-                            summaryMap.panInsideBounds([[-85, -180], [85, 180]], { animate: false });
-                        }
-                    }
-                    updateSummaryLines();
-                };
+        copyTextToClipboard(shareText);
+      }
 
-                requestAnimationFrame(() => {
-                    fitSummaryMap();
-                    setTimeout(() => {
-                        fitSummaryMap();
-                    }, 250);
-                });
-            }, 200);
-        }
+      function shareResults() {
+        const finalScore = Math.floor(rawTotalScore * globalSynergy);
+        const roundLines = roundData
+          .map((r) => {
+            const distanceKm = Math.round(r.dist);
+            const parts = [
+              getDistanceShareSymbol(distanceKm),
+              `${distanceKm.toLocaleString()} km`,
+            ];
 
-        function shareResults() {
-            let grid = "";
-            roundData.forEach(r => {
-                if (r.dist < 50) grid += "🟪";       
-                else if (r.dist < 600) grid += "🟩"; 
-                else if (r.dist < 1500) grid += "🟨";
-                else if (r.dist < 2500) grid += "🟧"; 
-                else grid += "⬛";                    
-            });
-
-            const finalScore = Math.floor(rawTotalScore * globalSynergy);
-            
-            const shareText = 
-                `Blind Geoguessr\n` +
-                `${grid}\n` +
-                `Base Points: ${rawTotalScore.toLocaleString()}\n` +
-                `Synergy Combo: x${globalSynergy.toFixed(2)}\n` +
-               `Final Score: ${finalScore.toLocaleString()}\n` +
-                `Play here: https://avandy-geo.github.io/blind-geoguessr/\n`;
-            
-            copyTextToClipboard(shareText);
-        }
-
-        function copyTextToClipboard(text) {
-            if (navigator.clipboard && window.isSecureContext) {
-                navigator.clipboard.writeText(text).then(() => {
-                    alert("Results copied! Paste it to your friends.");
-                }).catch(() => fallbackCopyText(text));
-                return;
+            if (r.countryMatched) {
+              parts.push("\u2705");
+            } else if (r.continentMatched) {
+              parts.push("\u{1F30D}");
             }
 
-            fallbackCopyText(text);
-        }
-
-        function fallbackCopyText(text) {
-            const textArea = document.createElement('textarea');
-            textArea.value = text;
-            textArea.setAttribute('readonly', '');
-            textArea.style.position = 'fixed';
-            textArea.style.left = '-9999px';
-            textArea.style.top = '0';
-            document.body.appendChild(textArea);
-            textArea.focus();
-            textArea.select();
-
-            try {
-                const copied = document.execCommand('copy');
-                alert(copied ? "Results copied! Paste it to your friends." : "Copy failed. Select and copy the results manually.");
-            } catch (err) {
-                alert("Copy failed. Select and copy the results manually.");
+            if ((r.shareComboAdded || 0) >= 3.0) {
+              parts.push("\u{1F525}");
             }
 
-            document.body.removeChild(textArea);
+            return parts.join(" ");
+          })
+          .join("\n");
+
+        const shareText =
+          `Blind Geoguessr\n` +
+          `${roundLines}\n\n` +
+          `Base Points: ${rawTotalScore.toLocaleString()}\n` +
+          `Combo: x${globalSynergy.toFixed(2)}\n` +
+          `Final Score: ${finalScore.toLocaleString()}\n` +
+          `Play here: https://avandy-geo.github.io/blind-geoguessr/\n`;
+
+        copyTextToClipboard(shareText);
+      }
+
+      function getDistanceShareSymbol(distanceKm) {
+        if (distanceKm < 50) return "\u{1F537}";
+        if (distanceKm < 150) return "\u{1F7E6}";
+        if (distanceKm < 600) return "\u{1F7E9}";
+        if (distanceKm < 1500) return "\u{1F7E8}";
+        if (distanceKm < 2500) return "\u{1F7E7}";
+        return "\u2B1B";
+      }
+
+      function copyTextToClipboard(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+          navigator.clipboard
+            .writeText(text)
+            .then(() => {
+              alert("Results copied! Paste it to your friends.");
+            })
+            .catch(() => fallbackCopyText(text));
+          return;
         }
+
+        fallbackCopyText(text);
+      }
+
+      function fallbackCopyText(text) {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.setAttribute("readonly", "");
+        textArea.style.position = "fixed";
+        textArea.style.left = "-9999px";
+        textArea.style.top = "0";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+
+        try {
+          const copied = document.execCommand("copy");
+          alert(
+            copied
+              ? "Results copied! Paste it to your friends."
+              : "Copy failed. Select and copy the results manually.",
+          );
+        } catch (err) {
+          alert("Copy failed. Select and copy the results manually.");
+        }
+
+        document.body.removeChild(textArea);
+      }
+
+      function isSupabaseConfigured() {
+        return (
+          SUPABASE_URL.startsWith("https://") && SUPABASE_ANON_KEY.length > 20
+        );
+      }
+
+      async function supabaseRpc(functionName, payload = {}) {
+        const response = await fetch(
+          `${SUPABASE_URL}/rest/v1/rpc/${functionName}`,
+          {
+            method: "POST",
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
+
+        return response.json();
+      }
+
+      function normalizeLeaderboardRows(rows) {
+        const filledRows = Array.isArray(rows) ? rows.slice(0, 10) : [];
+        while (filledRows.length < 10) {
+          filledRows.push(null);
+        }
+        return filledRows;
+      }
+
+      function renderLeaderboardRows(rows) {
+        leaderboardBody.innerHTML = "";
+        normalizeLeaderboardRows(rows).forEach((row, index) => {
+          const tr = document.createElement("tr");
+          const rank = index + 1;
+          tr.innerHTML = `
+                    <td>${rank}</td>
+                    <td>${row ? escapeHtml(row.player_name) : ""}</td>
+                    <td class="leaderboard-score">${row ? Number(row.score).toLocaleString() : ""}</td>
+                `;
+          leaderboardBody.appendChild(tr);
+        });
+      }
+
+      function escapeHtml(value) {
+        const div = document.createElement("div");
+        div.innerText = value;
+        return div.innerHTML;
+      }
+
+      function getLocalLeaderboard() {
+        try {
+          return JSON.parse(
+            localStorage.getItem("blind-geoguessr-leaderboard") || "[]",
+          );
+        } catch {
+          return [];
+        }
+      }
+
+      function saveLocalLeaderboard(rows) {
+        localStorage.setItem(
+          "blind-geoguessr-leaderboard",
+          JSON.stringify(rows.slice(0, 10)),
+        );
+      }
+
+      function submitLocalLeaderboardScore(name, score, gameData = null) {
+        const rows = getLocalLeaderboard();
+        const existingIndex = rows.findIndex(
+          (row) => row.player_name.toLowerCase() === name.toLowerCase(),
+        );
+        if (existingIndex !== -1 && rows[existingIndex].score >= score) {
+          return rows;
+        }
+        if (existingIndex !== -1) {
+          rows.splice(existingIndex, 1);
+        }
+        rows.push({
+          player_name: name,
+          score,
+          game_data: gameData,
+          created_at: new Date().toISOString(),
+        });
+        rows.sort(
+          (a, b) =>
+            b.score - a.score ||
+            new Date(a.created_at) - new Date(b.created_at),
+        );
+        saveLocalLeaderboard(rows);
+        return rows;
+      }
+
+      async function loadLeaderboard() {
+        leaderboardStatus.innerText = "Loading leaderboard...";
+        try {
+          const rows = isSupabaseConfigured()
+            ? await supabaseRpc("get_leaderboard")
+            : getLocalLeaderboard();
+          renderLeaderboardRows(rows);
+          leaderboardStatus.innerText = isSupabaseConfigured()
+            ? ""
+            : "Local preview only. Add Supabase config to make this online for everyone.";
+        } catch (err) {
+          console.error("Leaderboard load failed", err);
+          renderLeaderboardRows([]);
+          leaderboardStatus.innerText =
+            "Leaderboard could not be loaded right now.";
+        }
+      }
+
+      async function submitLeaderboardScore(score) {
+        if (!playerName || !Number.isFinite(score)) return;
+        const gameData = buildLeaderboardGameData(score);
+        try {
+          const rows = isSupabaseConfigured()
+            ? await supabaseRpc("submit_score", {
+                player_name_input: playerName,
+                score_input: score,
+                game_data_input: gameData,
+              })
+            : submitLocalLeaderboardScore(playerName, score, gameData);
+          renderLeaderboardRows(rows);
+        } catch (err) {
+          console.error("Score submit failed", err);
+        }
+      }
+
+      function buildLeaderboardGameData(finalScore) {
+        return {
+          schema: 1,
+          playerName,
+          finalScore,
+          basePoints: rawTotalScore,
+          comboMultiplier: Number(globalSynergy.toFixed(4)),
+          createdAt: new Date().toISOString(),
+          rounds: roundData.map((r, index) => ({
+            round: index + 1,
+            distanceKm: Number(r.dist.toFixed(3)),
+            score: r.score,
+            countryMatched: r.countryMatched,
+            continentMatched: r.continentMatched,
+            targetCountry: r.targetCountry,
+            guessCountry: r.guessCountry,
+            targetContinent: r.targetContinent,
+            guessContinent: r.guessContinent,
+            guessLat: Number(r.guessLatLng.lat.toFixed(6)),
+            guessLng: Number(r.guessLatLng.lng.toFixed(6)),
+            targetLat: Number(r.targetLatLng.lat.toFixed(6)),
+            targetLng: Number(r.targetLatLng.lng.toFixed(6)),
+            appliedIsolation: Number(r.appliedIsolation.toFixed(4)),
+            targetMacroIsolation: Number(r.targetMacroIsolation.toFixed(4)),
+            targetMicroIsolation: Number(r.targetMicroIsolation.toFixed(4)),
+            targetOpenOcean: Number(r.targetOpenOcean.toFixed(4)),
+            guessMacroIsolation: Number(r.guessMacroIsolation.toFixed(4)),
+            guessMicroIsolation: Number(r.guessMicroIsolation.toFixed(4)),
+            guessOpenOcean: Number(r.guessOpenOcean.toFixed(4)),
+            comboAdded: Number(r.comboAdded.toFixed(4)),
+            shareComboAdded: Number((r.shareComboAdded || 0).toFixed(4)),
+            precisionComboAdded: Number(r.precisionComboAdded.toFixed(4)),
+            continentComboAdded: Number(r.continentComboAdded.toFixed(4)),
+            countryComboAdded: Number(r.countryComboAdded.toFixed(4)),
+            continentComboCount: r.continentComboCount,
+            countryComboCount: r.countryComboCount,
+          })),
+        };
+      }
+
+      function showLeaderboard() {
+        document.getElementById("leaderboard-screen").style.display = "flex";
+        loadLeaderboard();
+      }
+
+      function hideLeaderboard() {
+        document.getElementById("leaderboard-screen").style.display = "none";
+      }
+
+      function restartGame() {
+        if (reviewLineUpdateHandler) {
+          map.off("zoomend moveend", reviewLineUpdateHandler);
+          reviewLineUpdateHandler = null;
+        }
+
+        if (userMarker) map.removeLayer(userMarker);
+        if (targetMarker) map.removeLayer(targetMarker);
+        if (polyline) map.removeLayer(polyline);
+        if (summaryMapInstance) {
+          summaryMapInstance.remove();
+          summaryMapInstance = null;
+        }
+
+        userMarker = null;
+        targetMarker = null;
+        polyline = null;
+        targets.length = 0;
+        currentRound = 0;
+        rawTotalScore = 0;
+        globalSynergy = 1.0;
+        continentComboCount = 0;
+        countryComboCount = 0;
+        roundData = [];
+        worldReady = false;
+        usernameSubmitted = true;
+        gameState = "starting";
+
+        roundDisplay.innerText = "1";
+        scoreDisplay.innerText = "0";
+        updatePlayerDisplays();
+        roundResult.style.display = "none";
+        actionBtn.innerText = "Place your pin first";
+        actionBtn.disabled = true;
+        document.getElementById("end-screen").style.display = "none";
+        document.getElementById("leaderboard-screen").style.display = "none";
+        document.getElementById("loading-screen").style.display = "flex";
+        usernameCard.style.display = "none";
+        worldLoadingCard.style.display = "block";
+        map.setView([20, 0], START_ZOOM);
 
         initGame();
+      }
+
+      initGame();
     </script>
-</body>
+  </body>
 </html>

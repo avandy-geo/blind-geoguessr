@@ -246,6 +246,8 @@
       .leaderboard-card {
         max-width: 760px;
         width: min(760px, calc(100vw - 30px));
+        max-height: 80vh;
+        overflow-y: auto;
       }
 
       .leaderboard-top {
@@ -310,7 +312,56 @@
         color: var(--text-muted);
         min-height: 1.3em;
       }
+      .leaderboard-details-head,
+      .leaderboard-details-cell {
+        width: 42px;
+        text-align: right;
+      }
 
+      .leaderboard-toggle {
+        width: 30px;
+        height: 30px;
+        border: 1px solid var(--border);
+        background: #fff;
+        color: var(--text);
+        border-radius: 6px;
+        font-weight: 900;
+        cursor: pointer;
+        line-height: 1;
+      }
+
+      .leaderboard-toggle:hover:not(:disabled) {
+        border-color: var(--primary);
+        color: var(--primary);
+      }
+
+      .leaderboard-toggle:disabled {
+        color: #bbb;
+        cursor: default;
+      }
+
+      .leaderboard-round-details td {
+        padding: 0 10px 12px 10px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .leaderboard-round-details[hidden] {
+        display: none;
+      }
+
+      .leaderboard-round-lines {
+        margin: 0 auto;
+        padding: 10px 0 10px 14px;
+        border: none;
+        background: transparent;
+        color: var(--text);
+        font-size: 0.9rem;
+        line-height: 1.55;
+        white-space: pre-line;
+        text-align: left;
+        width: fit-content;
+        min-width: 160px;
+      }
       .overlay {
         position: absolute;
         top: 0;
@@ -749,11 +800,13 @@
         correct continent and/or country.
       </p>
       <button class="header-action" onclick="showLeaderboard()">
-        Leaderboard 🏆
+        Leaderboard &#127942;
       </button>
       <div class="stats-bar">
         <div>Round: <span id="round-display">1</span> / 5</div>
-        <div class="player-stat">Player: <span id="player-display">-</span></div>
+        <div class="player-stat">
+          Player: <span id="player-display">-</span>
+        </div>
         <div>Score: <span id="score-display">0</span></div>
       </div>
     </header>
@@ -798,15 +851,18 @@
     <div id="leaderboard-screen" class="overlay" style="display: none">
       <div class="card leaderboard-card">
         <div class="leaderboard-top">
-          <button class="back-btn" onclick="hideLeaderboard()">← Back</button>
-          <h2>Leaderboard 🏆</h2>
+          <button class="back-btn" onclick="hideLeaderboard()">
+            &larr; Back
+          </button>
+          <h2>Leaderboard &#127942;</h2>
         </div>
         <table class="leaderboard-table">
           <thead>
             <tr>
               <th>Rank</th>
               <th>Player</th>
-              <th class="leaderboard-score">High score</th>
+              <th class="leaderboard-score">High Score</th>
+              <th class="leaderboard-details-head"></th>
             </tr>
           </thead>
           <tbody id="leaderboard-body"></tbody>
@@ -818,7 +874,9 @@
     <div id="end-screen" class="overlay">
       <div class="card">
         <div class="card-header">
-          <div class="result-player">Player: <span id="result-player-display">-</span></div>
+          <div class="result-player">
+            Player: <span id="result-player-display">-</span>
+          </div>
           <h2>Game Over!</h2>
           <button class="card-header-action" onclick="showLeaderboard()">
             Leaderboard &#127942;
@@ -842,9 +900,17 @@
                   padding-bottom: 5px;
                 "
               >
-                <span>Precision Scaling Combo:</span>
+                <span>Total Combo:</span>
                 <span id="final-synergy">x1.00</span>
               </div>
+              <div
+                id="final-combo-breakdown"
+                style="
+                  font-size: 0.82rem;
+                  color: var(--text-muted);
+                  margin-top: 6px;
+                "
+              ></div>
               <div class="final-score" id="final-total">0</div>
             </div>
           </div>
@@ -885,8 +951,10 @@
       const OPEN_OCEAN_BEARING_COUNT = 24;
       const MIN_MACRO_ISOLATION = 0.35;
       const MIN_MICRO_ISOLATION = 0.58;
-      // Debug target override. Set to null to go back to fully random targets.
-      const DEBUG_FIRST_TARGET = null;
+      const COUNTRY_SELECTION_POWER = 0.75;
+      const LARGE_COUNTRY_AREA_M2 = 4500000000000;
+      const MICRO_COUNTRY_AREA_M2 = 2500000000;
+      const NEIGHBOR_DENSITY_RADIUS_KM = 900;
 
       let worldGeoJSON = null;
       let continentGeoJSON = null;
@@ -896,8 +964,18 @@
       let currentRound = 0;
       let rawTotalScore = 0;
       let globalSynergy = 1.0;
-      let continentComboCount = 0;
-      let countryComboCount = 0;
+      let precisionComboTotal = 0;
+      let continentComboTotal = 0;
+      let countryComboTotal = 0;
+      let precisionMultiplier = 1.0;
+      let continentMultiplier = 1.0;
+      let countryMultiplier = 1.0;
+      let precisionEliteConsistencyCount = 0;
+      let precisionGreatConsistencyCount = 0;
+      let precisionTightConsistencyCount = 0;
+      let precisionGoodConsistencyCount = 0;
+      let continentConsistencyCount = 0;
+      let countryConsistencyCount = 0;
       let roundData = [];
       let gameState = "starting";
       let playerName = "";
@@ -1081,10 +1159,9 @@
 
       function getPointAdjustedCountryContinent(latlng, countryFeature) {
         const code = getCountryCode(countryFeature);
-        const fallback = featureContinentName(countryFeature);
 
-        // Natural Earth assigns one continent per country. These point checks fix the cases
-        // where a country genuinely crosses the usual Europe/Asia or Africa/Asia boundary.
+        // Natural Earth assigns one continent per country. These point checks fix countries
+        // that genuinely cross the usual Europe/Asia or Africa/Asia boundary.
         if (code === "RUS") return latlng.lng < 60 ? "Europe" : "Asia";
         if (code === "TUR") return latlng.lng < 29.8 ? "Europe" : "Asia";
         if (code === "KAZ")
@@ -1094,9 +1171,74 @@
         if (code === "AZE" || code === "GEO")
           return latlng.lat > 42 ? "Europe" : "Asia";
 
-        return fallback;
+        return null;
       }
 
+      function isPointInBox(latlng, south, west, north, east) {
+        return (
+          latlng.lat >= south &&
+          latlng.lat <= north &&
+          latlng.lng >= west &&
+          latlng.lng <= east
+        );
+      }
+
+      function getOverseasGeographicContinent(latlng, countryFeature = null) {
+        // --- NORTH AMERICA OVERSEAS ---
+        // Catches the entire Caribbean Sea (Martinique, Curaçao, Aruba, etc.)
+        if (isPointInBox(latlng, 9, -85, 25, -55)) return "North America";
+        // Bermuda
+        if (isPointInBox(latlng, 31, -66, 34, -63)) return "North America";
+        // Denmark / Greenland
+        if (isPointInBox(latlng, 57, -75, 84, -10)) return "North America";
+        // French Saint Pierre and Miquelon
+        if (isPointInBox(latlng, 46, -57, 48, -55)) return "North America";
+
+        // --- AFRICA OVERSEAS ---
+        // French Réunion, Mayotte, Mauritius, Seychelles
+        if (isPointInBox(latlng, -25, 42, -10, 60)) return "Africa";
+        // Deep Southern Indian Ocean (Kerguelen, Crozet, Amsterdam)
+        if (isPointInBox(latlng, -55, 45, -35, 80)) return "Africa";
+        // Spanish Canary Islands, Madeira, Ceuta/Melilla
+        if (isPointInBox(latlng, 26, -20, 37, -5)) return "Africa";
+        // Cape Verde
+        if (isPointInBox(latlng, 14, -26, 18, -22)) return "Africa";
+        // Mid-Atlantic & Deep South Atlantic (Saint Helena, Ascension, Tristan da Cunha, Bouvet)
+        if (isPointInBox(latlng, -55, -15, -5, 10)) return "Africa";
+
+        // --- EUROPE OVERSEAS ---
+        // Azores (Portugal)
+        if (isPointInBox(latlng, 36, -32, 40, -24)) return "Europe";
+        // Svalbard and Jan Mayen (Norway)
+        if (isPointInBox(latlng, 70, -10, 82, 35)) return "Europe";
+
+        // --- SOUTH AMERICA OVERSEAS ---
+        // Galapagos Islands (Ecuador)
+        if (isPointInBox(latlng, -2, -93, 2, -88)) return "South America";
+        // Falkland Islands, South Georgia, and the South Sandwich Islands
+        if (isPointInBox(latlng, -62, -65, -50, -20)) return "South America";
+
+        // --- ASIA OVERSEAS ---
+        // Maldives & British Indian Ocean Territory (Diego Garcia)
+        if (isPointInBox(latlng, -8, 70, 8, 75)) return "Asia";
+
+        // --- OCEANIA OVERSEAS ---
+        // US Hawaii & Central Pacific (Midway, Johnston, Palmyra, Howland/Baker)
+        if (isPointInBox(latlng, 0, -180, 30, -150)) return "Oceania";
+        // Guam / Marianas / Micronesia / Wake Island
+        if (isPointInBox(latlng, 2, 130, 25, 180)) return "Oceania";
+        // South Pacific East (American Samoa, French Polynesia, Pitcairn)
+        if (isPointInBox(latlng, -35, -180, 0, -110)) return "Oceania";
+        // South Pacific West (New Caledonia, Fiji, Vanuatu, Wallis and Futuna)
+        if (isPointInBox(latlng, -35, 150, 0, 180)) return "Oceania";
+        // Australian Indian Ocean Territories (Christmas Island, Cocos Keeling)
+        if (isPointInBox(latlng, -15, 95, -10, 110)) return "Oceania";
+        // Chilean Easter Island
+        if (isPointInBox(latlng, -28, -111, -26, -108)) return "Oceania";
+
+        // If it isn't in any of these boxes, return null so the game can fallback safely
+        return null;
+      }
       function getContinentAtPoint(latlng, fallbackCountryFeature = null) {
         const adjustedCountryContinent = getPointAdjustedCountryContinent(
           latlng,
@@ -1104,6 +1246,14 @@
         );
         if (adjustedCountryContinent) {
           return adjustedCountryContinent;
+        }
+
+        const overseasContinent = getOverseasGeographicContinent(
+          latlng,
+          fallbackCountryFeature,
+        );
+        if (overseasContinent) {
+          return overseasContinent;
         }
 
         const pt = turf.point([latlng.lng, latlng.lat]);
@@ -1120,9 +1270,9 @@
             }
           }
         }
-        return adjustedCountryContinent;
-      }
 
+        return featureContinentName(fallbackCountryFeature);
+      }
       function samplePointAround(lat, lng, radiusKm) {
         const bearing = Math.random() * 360;
         const distance = Math.sqrt(Math.random()) * radiusKm;
@@ -1279,6 +1429,7 @@
         distanceKm,
         targetContinent,
         guessContinent,
+        targetCountryFeature = null,
       ) {
         let targetMacro = targetIsolation.macro;
         const targetMicro = targetIsolation.micro;
@@ -1288,6 +1439,11 @@
         const guessOpenOcean = guessIsolation.openOcean || 0;
         const isEuropeanTarget = targetContinent === "Europe";
         const isLikelyIsland = targetMicro > 0.72 && targetMacro > 0.45;
+        const neighborDensity =
+          targetCountryFeature?.properties?.neighborDensity || 0;
+        const smallCountryFactor = targetCountryFeature
+          ? calculateCountrySmallness(targetCountryFeature.properties.trueArea)
+          : 0;
 
         if (isEuropeanTarget && !isLikelyIsland) {
           targetMacro = Math.min(targetMacro, 0.42);
@@ -1314,29 +1470,36 @@
           guessContextFloor +
           (1 - guessContextFloor) * smoothstep(0.22, 0.72, guessCoastalContext);
 
-        const coastalGate = calculateDistanceGate(distanceKm, 500, 3300);
-        const openOceanGate = calculateDistanceGate(distanceKm, 700, 4200);
-        const islandGate = calculateDistanceGate(distanceKm, 180, 1250);
+        const coastalGate = calculateDistanceGate(distanceKm, 220, 1600);
+        const openOceanGate = calculateDistanceGate(distanceKm, 260, 1800);
+        const islandGate = calculateDistanceGate(distanceKm, 65, 575);
 
         const coastalBonus =
           coastalScore > MIN_MACRO_ISOLATION
-            ? Math.min(0.26, coastalScore * 0.34) *
+            ? Math.min(0.036, coastalScore * 0.048) *
               coastalGate *
               guessContextGate
             : 0;
 
         const openOceanBonus =
           targetOpenOcean > 0.28
-            ? openOceanScore * 0.62 * openOceanGate * guessContextGate
+            ? openOceanScore * 0.066 * openOceanGate * guessContextGate
             : 0;
 
         const islandBonus =
           islandScore > 0
-            ? islandScore * 2.8 * islandGate * Math.max(0.45, guessContextGate)
+            ? islandScore *
+              0.405 *
+              islandGate *
+              Math.max(0.35, guessContextGate)
             : 0;
 
-        const macroBonus = coastalBonus + openOceanBonus;
-        const microBonus = islandBonus;
+        const crowdedPenalty =
+          1 - neighborDensity * (0.24 + smallCountryFactor * 0.56);
+        const isolationUpside =
+          1 + (1 - neighborDensity) * smallCountryFactor * 0.1;
+        const macroBonus = (coastalBonus + openOceanBonus) * crowdedPenalty;
+        const microBonus = islandBonus * crowdedPenalty * isolationUpside;
         const isolationStrength = Math.max(
           coastalScore,
           targetOpenOcean,
@@ -1355,6 +1518,9 @@
           isolationStrength,
           openOcean: targetOpenOcean,
           guessContextGate,
+          neighborDensity,
+          crowdedPenalty,
+          isolationUpside,
           isEuropeanDampened: isEuropeanTarget && !isLikelyIsland,
         };
       }
@@ -1379,6 +1545,22 @@
 
       function lerp(start, end, amount) {
         return start + (end - start) * amount;
+      }
+
+      function calculateCountrySmallness(areaM2) {
+        const safeArea = Math.max(1, areaM2 || LARGE_COUNTRY_AREA_M2);
+        const logLarge = Math.log(LARGE_COUNTRY_AREA_M2);
+        const logMicro = Math.log(MICRO_COUNTRY_AREA_M2);
+        const amount = (logLarge - Math.log(safeArea)) / (logLarge - logMicro);
+        return Math.max(0, Math.min(1, amount));
+      }
+
+      function calculateCountryMatchSizeMultiplier(countryFeature) {
+        if (!countryFeature) return 1;
+        const smallness = calculateCountrySmallness(
+          countryFeature.properties.trueArea,
+        );
+        return 1 + Math.pow(smallness, 0.95) * 1.5;
       }
 
       function createSummaryIcon(roundNumber, type) {
@@ -1424,32 +1606,109 @@
         ];
       }
 
-      function calculateRoundCombo(distanceKm, continentMatch, countryMatch) {
-        const precisionCombo =
-          distanceKm < 2500 ? (2500 - distanceKm) / 1000 : 0;
-        let continentCombo = 0;
-        let countryCombo = 0;
+      function softMultiplier(total, scale, maxExtra) {
+        return 1 + maxExtra * (1 - Math.exp(-total * scale));
+      }
 
+      function updateGlobalSynergy() {
+        precisionMultiplier = softMultiplier(precisionComboTotal, 0.34, 2.4);
+        continentMultiplier = softMultiplier(continentComboTotal, 0.32, 1.8);
+        countryMultiplier = softMultiplier(countryComboTotal, 0.28, 3.0);
+        globalSynergy =
+          precisionMultiplier * continentMultiplier * countryMultiplier;
+        return globalSynergy;
+      }
+
+      function formatComboBreakdown() {
+        return `Precision x${precisionMultiplier.toFixed(2)} \u00B7 Continent x${continentMultiplier.toFixed(2)} \u00B7 Country x${countryMultiplier.toFixed(2)}`;
+      }
+
+      function formatBucketPart(label, total, consistency) {
+        const truePercentBoost = Math.round(
+          1.8 * (1 - Math.exp(-total * 0.32)) * 100,
+        );
+        const consistencyText =
+          consistency > 0
+            ? ` (consistency +${Math.round(1.8 * (1 - Math.exp(-consistency * 0.32)) * 100)}%)`
+            : "";
+        return `${label} +${truePercentBoost}%${consistencyText}`;
+      }
+
+      function calculateRoundCombo(
+        distanceKm,
+        continentMatch,
+        countryMatch,
+        targetCountryFeature = null,
+      ) {
+        const precisionBase =
+          distanceKm < 1800 ? ((1800 - distanceKm) / 1800) * 1.5 : 0;
+        let precisionConsistency = 0;
+        let precisionConsistencyTier = "none";
+
+        if (distanceKm < 100) {
+          precisionEliteConsistencyCount += 1;
+          precisionConsistency =
+            1.2 * Math.max(0, precisionEliteConsistencyCount - 1);
+          precisionConsistencyTier = "elite";
+        } else if (distanceKm < 200) {
+          precisionGreatConsistencyCount += 1;
+          precisionConsistency =
+            0.9 * Math.max(0, precisionGreatConsistencyCount - 1);
+          precisionConsistencyTier = "great";
+        } else if (distanceKm < 400) {
+          precisionTightConsistencyCount += 1;
+          precisionConsistency =
+            0.25 * Math.max(0, precisionTightConsistencyCount - 1);
+          precisionConsistencyTier = "tight";
+        } else if (distanceKm < 800) {
+          precisionGoodConsistencyCount += 1;
+          precisionConsistency =
+            0.1 * Math.max(0, precisionGoodConsistencyCount - 1);
+          precisionConsistencyTier = "good";
+        }
+
+        const continentBase = continentMatch ? 0.45 : 0;
+        let continentConsistency = 0;
         if (continentMatch) {
-          continentComboCount += 1;
-          continentCombo = 0.22 * Math.pow(1.45, continentComboCount - 1);
+          continentConsistencyCount += 1;
+          continentConsistency =
+            0.198 * Math.max(0, continentConsistencyCount - 1);
         }
 
+        const countrySizeMultiplier = countryMatch
+          ? calculateCountryMatchSizeMultiplier(targetCountryFeature)
+          : 1;
+        const countryBase = countryMatch ? countrySizeMultiplier : 0;
+        let countryConsistency = 0;
         if (countryMatch) {
-          countryComboCount += 1;
-          countryCombo = 0.85 * Math.pow(2.15, countryComboCount - 1);
+          countryConsistencyCount += 1;
+          countryConsistency = 0.45 * Math.max(0, countryConsistencyCount - 1);
         }
+
+        const precisionCombo = precisionBase + precisionConsistency;
+        const continentCombo = continentBase + continentConsistency;
+        const countryCombo = countryBase + countryConsistency;
 
         return {
           total: precisionCombo + continentCombo + countryCombo,
           precision: precisionCombo,
           continent: continentCombo,
           country: countryCombo,
-          continentCount: continentComboCount,
-          countryCount: countryComboCount,
+          precisionBase,
+          precisionConsistency,
+          precisionConsistencyTier,
+          continentBase,
+          continentConsistency,
+          countryBase,
+          countryConsistency,
+          countrySizeMultiplier,
+          countrySmallness: targetCountryFeature
+            ? calculateCountrySmallness(
+                targetCountryFeature.properties.trueArea,
+              )
+            : 0,
         };
       }
-
       async function initGame() {
         try {
           const [countryResponse, continentResponse] = await Promise.all([
@@ -1476,56 +1735,31 @@
           validCountriesGlobal.forEach((c) => {
             c.bbox = turf.bbox(c);
             c.properties.trueArea = turf.area(c);
-            totalWorldArea += c.properties.trueArea;
-          });
-
-          if (DEBUG_FIRST_TARGET) {
-            const debugLatLng = L.latLng(
-              DEBUG_FIRST_TARGET.lat,
-              DEBUG_FIRST_TARGET.lng,
+            c.properties.effectiveArea = Math.pow(
+              Math.max(1, c.properties.trueArea),
+              COUNTRY_SELECTION_POWER,
             );
-            const debugCountry = getFeatureAtPoint(debugLatLng);
-            targets.push({
-              latLng: debugLatLng,
-              isolation: calculateIsolationProfile(
-                DEBUG_FIRST_TARGET.lat,
-                DEBUG_FIRST_TARGET.lng,
-              ),
-              continent: getContinentAtPoint(debugLatLng, debugCountry),
-              countryFeature: debugCountry,
-            });
-          }
-
+            c.properties.centroid = turf.centroid(c).geometry.coordinates;
+            totalWorldArea += c.properties.effectiveArea;
+          });
+          calculateCountryNeighborDensities(validCountriesGlobal);
           while (targets.length < 5) {
             let randomVal = Math.random() * totalWorldArea;
             let areaSum = 0;
             let selectedCountry = null;
 
             for (let c of validCountriesGlobal) {
-              areaSum += c.properties.trueArea;
+              areaSum += c.properties.effectiveArea;
               if (randomVal <= areaSum) {
                 selectedCountry = c;
                 break;
               }
             }
 
-            let bbox = selectedCountry.bbox;
-            let lat = 0,
-              lng = 0,
-              found = false;
+            const randomPoint = getRandomPointInFeature(selectedCountry);
 
-            for (let attempt = 0; attempt < 100; attempt++) {
-              lng = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
-              lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
-              let pt = turf.point([lng, lat]);
-
-              if (turf.booleanPointInPolygon(pt, selectedCountry)) {
-                found = true;
-                break;
-              }
-            }
-
-            if (found) {
+            if (randomPoint) {
+              const { lat, lng } = randomPoint;
               const targetLatLng = L.latLng(lat, lng);
               targets.push({
                 latLng: targetLatLng,
@@ -1565,6 +1799,96 @@
         }
       }
 
+      function calculateCountryNeighborDensities(countries) {
+        let maxDensity = 0;
+
+        countries.forEach((country) => {
+          const countryPoint = turf.point(country.properties.centroid);
+          let density = 0;
+
+          countries.forEach((otherCountry) => {
+            if (otherCountry === country) return;
+
+            const distanceKm = turf.distance(
+              countryPoint,
+              turf.point(otherCountry.properties.centroid),
+              { units: "kilometers" },
+            );
+
+            if (distanceKm <= NEIGHBOR_DENSITY_RADIUS_KM) {
+              const closeness = 1 - distanceKm / NEIGHBOR_DENSITY_RADIUS_KM;
+              density += closeness * closeness;
+            }
+          });
+
+          country.properties.rawNeighborDensity = density;
+          maxDensity = Math.max(maxDensity, density);
+        });
+
+        countries.forEach((country) => {
+          country.properties.neighborDensity =
+            maxDensity > 0
+              ? country.properties.rawNeighborDensity / maxDensity
+              : 0;
+        });
+      }
+
+      function getRandomPointInFeature(feature) {
+        const chunks = getLandChunks(feature);
+        const totalChunkArea = chunks.reduce(
+          (sum, chunk) => sum + chunk.area,
+          0,
+        );
+        let randomValue = Math.random() * totalChunkArea;
+        let selectedChunk = chunks[chunks.length - 1];
+
+        for (const chunk of chunks) {
+          randomValue -= chunk.area;
+          if (randomValue <= 0) {
+            selectedChunk = chunk;
+            break;
+          }
+        }
+
+        const bbox = selectedChunk.bbox;
+
+        for (let attempt = 0; attempt < 5000; attempt++) {
+          const lng = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
+          const lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
+          const pt = turf.point([lng, lat]);
+
+          if (turf.booleanPointInPolygon(pt, selectedChunk.feature)) {
+            return { lat, lng };
+          }
+        }
+
+        console.warn(
+          "Could not place target inside selected country",
+          feature.properties.NAME,
+        );
+        return null;
+      }
+
+      function getLandChunks(feature) {
+        const geometry = feature.geometry;
+        const polygons =
+          geometry.type === "MultiPolygon"
+            ? geometry.coordinates
+            : [geometry.coordinates];
+        return polygons.map((coordinates) => {
+          const chunkFeature = {
+            type: "Feature",
+            properties: feature.properties,
+            geometry: { type: "Polygon", coordinates },
+          };
+          return {
+            feature: chunkFeature,
+            bbox: turf.bbox(chunkFeature),
+            area: Math.max(1, turf.area(chunkFeature)),
+          };
+        });
+      }
+
       map.on("click", function (e) {
         if (gameState !== "guessing") return;
         if (!userMarker) {
@@ -1590,14 +1914,13 @@
         let targetFeature = targetData.countryFeature;
         let guessFeature = getFeatureAtPoint(guess);
 
-        let countryMatch = false;
-        let continentMatch = false;
+        countryMatch = false;
+        continentMatch = false;
+
         let targetContinent =
           targetData.continent ||
           getContinentAtPoint(targetData.latLng, targetFeature);
-        let guessContinent = guessFeature
-          ? getContinentAtPoint(guess, guessFeature)
-          : null;
+        let guessContinent = getContinentAtPoint(guess, guessFeature);
 
         if (targetFeature && guessFeature) {
           const tName = targetFeature.properties.NAME || "target_name_null";
@@ -1605,14 +1928,15 @@
 
           if (tName === gName && tName !== "target_name_null") {
             countryMatch = true;
-            continentMatch = true;
-          } else if (
-            targetContinent &&
-            guessContinent &&
-            targetContinent === guessContinent
-          ) {
-            continentMatch = true;
           }
+        }
+
+        if (
+          targetContinent &&
+          guessContinent &&
+          targetContinent === guessContinent
+        ) {
+          continentMatch = true;
         }
 
         let asymptoteScore = 1000000 / (distanceKm + 1);
@@ -1636,6 +1960,7 @@
           distanceKm,
           targetContinent,
           guessContinent,
+          targetFeature,
         );
         let appliedIsolationBonus = isolationBonus.multiplier;
 
@@ -1646,14 +1971,15 @@
           distanceKm,
           continentMatch,
           countryMatch,
+          targetFeature,
         );
         let roundSynergyBoost = roundCombo.total;
+        precisionComboTotal += roundCombo.precision;
+        continentComboTotal += roundCombo.continent;
+        countryComboTotal += roundCombo.country;
+        updateGlobalSynergy();
         const roundShareCombo =
-          roundCombo.precision +
-          (continentMatch ? 0.22 : 0) +
-          (countryMatch ? 0.85 : 0) +
-          Math.max(0, appliedIsolationBonus - 1);
-        globalSynergy += roundSynergyBoost;
+          roundCombo.total + Math.max(0, appliedIsolationBonus - 1) * 0.8;
 
         roundData.push({
           guessLatLng: guess,
@@ -1677,11 +2003,27 @@
           guessContinent: guessContinent || "",
           comboAdded: roundSynergyBoost,
           shareComboAdded: roundShareCombo,
+          precisionBaseAdded: roundCombo.precisionBase,
+          precisionConsistencyAdded: roundCombo.precisionConsistency,
+          precisionConsistencyTier: roundCombo.precisionConsistencyTier,
+          continentBaseAdded: roundCombo.continentBase,
+          continentConsistencyAdded: roundCombo.continentConsistency,
+          countryBaseAdded: roundCombo.countryBase,
+          countryConsistencyAdded: roundCombo.countryConsistency,
           precisionComboAdded: roundCombo.precision,
           continentComboAdded: roundCombo.continent,
           countryComboAdded: roundCombo.country,
-          continentComboCount: roundCombo.continentCount,
-          countryComboCount: roundCombo.countryCount,
+          countrySizeMultiplier: roundCombo.countrySizeMultiplier,
+          countrySmallness: roundCombo.countrySmallness,
+          targetNeighborDensity: isolationBonus.neighborDensity,
+          isolationCrowdedPenalty: isolationBonus.crowdedPenalty,
+          isolationUpside: isolationBonus.isolationUpside,
+          precisionComboTotal,
+          continentComboTotal,
+          countryComboTotal,
+          precisionMultiplier,
+          continentMultiplier,
+          countryMultiplier,
         });
 
         targetMarker = L.marker(targetData.latLng, {
@@ -1737,24 +2079,43 @@
             isolationBonus.microBonus > 0.05
               ? ` + island x${(1 + isolationBonus.microBonus).toFixed(2)}`
               : "";
-          const oceanText =
-            openOceanPct >= 20 ? `, ${openOceanPct}% open-ocean exposure` : "";
+          const exposureParts = [`${isolationPct}% overall isolation`];
+          if (openOceanPct >= 20) {
+            exposureParts.push(
+              openOceanPct === isolationPct
+                ? `${isolationPct}% open-ocean exposure`
+                : `${openOceanPct}% open-ocean exposure`,
+            );
+          }
           const contextText =
             isolationBonus.guessContextGate < 0.55
               ? `, inland guess reduced`
               : "";
-          resultHtml += `<div class="bonus-indicator bonus-ocean">Isolation Bonus: ${isolationPct}% isolation${oceanText}${contextText} (x${appliedIsolationBonus.toFixed(2)}${microText})</div>`;
+          resultHtml += `<div class="bonus-indicator bonus-ocean">Isolation Bonus: ${exposureParts.join(", ")}${contextText} (x${appliedIsolationBonus.toFixed(2)}${microText})</div>`;
         }
 
         if (roundSynergyBoost > 0) {
           const comboParts = [];
+
+          // Helper to calculate the multiplier factor for a specific bucket
+          const getMult = (val) => 1 + 1.8 * (1 - Math.exp(-val * 0.32));
+
           if (roundCombo.precision > 0)
-            comboParts.push(`precision +${roundCombo.precision.toFixed(2)}`);
+            comboParts.push(
+              `Precision x${getMult(roundCombo.precision).toFixed(2)}`,
+            );
           if (roundCombo.continent > 0)
-            comboParts.push(`continent +${roundCombo.continent.toFixed(2)}`);
+            comboParts.push(
+              `Continent x${getMult(roundCombo.continent).toFixed(2)}`,
+            );
           if (roundCombo.country > 0)
-            comboParts.push(`country +${roundCombo.country.toFixed(2)}`);
-          resultHtml += `<div class="bonus-indicator bonus-combo">+${roundSynergyBoost.toFixed(2)} Combo (${comboParts.join(", ")})</div>`;
+            comboParts.push(
+              `Country x${getMult(roundCombo.country).toFixed(2)}`,
+            );
+
+          const totalRoundMult = getMult(roundSynergyBoost);
+
+          resultHtml += `<div class="bonus-indicator bonus-combo">Synergy progress x${totalRoundMult.toFixed(2)} (${comboParts.join(", ")})</div>`;
         }
 
         roundResult.innerHTML = resultHtml;
@@ -1796,6 +2157,31 @@
         const listContainer = document.getElementById("round-list-container");
         listContainer.innerHTML = "";
 
+        // 1. Calculate raw totals
+        const totalRawPrec = roundData.reduce(
+          (sum, r) => sum + r.precisionComboAdded,
+          0,
+        );
+        const totalRawCont = roundData.reduce(
+          (sum, r) => sum + r.continentComboAdded,
+          0,
+        );
+        const totalRawCoun = roundData.reduce(
+          (sum, r) => sum + r.countryComboAdded,
+          0,
+        );
+
+        const pGrowth = precisionMultiplier - 1;
+        const cGrowth = continentMultiplier - 1;
+        const coGrowth = countryMultiplier - 1;
+
+        // Helper to get the specific bonus label (e.g., 2nd time bonus)
+        const getBonusLabel = (count, label) => {
+          if (count <= 1) return "";
+          const suffix = ["", "st", "nd", "rd"][count] || "th";
+          return ` (${count}${suffix} ${label} bonus)`;
+        };
+
         roundData.forEach((r, idx) => {
           let matchText = "";
           if (r.countryMatched)
@@ -1803,30 +2189,62 @@
           else if (r.continentMatched)
             matchText = `<span style="font-size:0.75rem; color:var(--match);">Continent Match (+2K)</span>`;
 
+          const pBoost =
+            totalRawPrec > 0
+              ? (r.precisionComboAdded / totalRawPrec) * pGrowth
+              : 0;
+          const cBoost =
+            totalRawCont > 0
+              ? (r.continentComboAdded / totalRawCont) * cGrowth
+              : 0;
+          const coBoost =
+            totalRawCoun > 0
+              ? (r.countryComboAdded / totalRawCoun) * coGrowth
+              : 0;
+
+          // Fetch the consistency counts from your existing data logic
+          // Note: We use the ConsistencyAdded values > 0 to detect if a bonus was earned
+          const cLabel =
+            r.continentConsistencyAdded > 0
+              ? getBonusLabel(
+                  Math.round(r.continentConsistencyAdded / 0.198) + 1,
+                  "continent",
+                )
+              : "";
+          const coLabel =
+            r.countryConsistencyAdded > 0
+              ? getBonusLabel(
+                  Math.round(r.countryConsistencyAdded / 0.45) + 1,
+                  "country",
+                )
+              : "";
+
           listContainer.innerHTML += `
-                    <div class="round-row">
-                        <div class="round-info">
-                            <strong>Round ${idx + 1}</strong>
-                            <span style="color:#666;">${Math.round(r.dist).toLocaleString()} km</span>
-                            ${matchText}
-                            ${r.appliedIsolation > 1.05 ? `<span style="font-size:0.8rem; color:var(--ocean);">x${r.appliedIsolation.toFixed(2)} Isolation Multi</span>` : ""}
-                            ${r.continentComboAdded > 0 ? `<span style="font-size:0.8rem; color:var(--combo);">Continent Combo #${r.continentComboCount}: +${r.continentComboAdded.toFixed(2)}</span>` : ""}
-                            ${r.countryComboAdded > 0 ? `<span style="font-size:0.8rem; color:var(--combo);">Country Combo #${r.countryComboCount}: +${r.countryComboAdded.toFixed(2)}</span>` : ""}
-                        </div>
-                        <div class="round-stats">
-                            <div style="color:var(--primary);">+${r.score.toLocaleString()} pts</div>
-                            ${r.comboAdded > 0 ? `<div style="font-size:0.85rem; color:var(--combo);">+${r.comboAdded.toFixed(2)} Combo</div>` : ""}
-                        </div>
-                    </div>
-                `;
+        <div class="round-row">
+            <div class="round-info">
+                <strong>Round ${idx + 1}</strong>
+                <span style="color:#666;">${Math.round(r.dist).toLocaleString()} km</span>
+                ${matchText}
+                ${r.appliedIsolation > 1.05 ? `<span style="font-size:0.8rem; color:var(--ocean);">Isolation x${r.appliedIsolation.toFixed(2)}</span>` : ""}
+                ${pBoost > 0.001 ? `<div style="font-size:0.8rem; color:var(--combo);">Precision: +${pBoost.toFixed(2)}</div>` : ""}
+                ${cBoost > 0.001 ? `<div style="font-size:0.8rem; color:var(--combo);">Continent: +${cBoost.toFixed(2)}${cLabel}</div>` : ""}
+                ${coBoost > 0.001 ? `<div style="font-size:0.8rem; color:var(--combo);">Country: +${coBoost.toFixed(2)}${coLabel}</div>` : ""}
+            </div>
+            <div class="round-stats">
+                <div style="color:var(--primary); font-weight:bold;">+${r.score.toLocaleString()} pts</div>
+            </div>
+        </div>
+        `;
         });
 
+        // Final screen logic remains the same...
         const finalScore = Math.floor(rawTotalScore * globalSynergy);
-
         document.getElementById("final-base").innerText =
           rawTotalScore.toLocaleString();
         document.getElementById("final-synergy").innerText =
           `x${globalSynergy.toFixed(2)}`;
+        document.getElementById("final-combo-breakdown").innerText =
+          formatComboBreakdown();
         document.getElementById("final-total").innerText =
           finalScore.toLocaleString();
         document.getElementById("end-screen").style.display = "flex";
@@ -1950,29 +2368,6 @@
       }
 
       function shareResults() {
-        let grid = "";
-        roundData.forEach((r) => {
-          if (r.dist < 50) grid += "🟪";
-          else if (r.dist < 600) grid += "🟩";
-          else if (r.dist < 1500) grid += "🟨";
-          else if (r.dist < 2500) grid += "🟧";
-          else grid += "⬛";
-        });
-
-        const finalScore = Math.floor(rawTotalScore * globalSynergy);
-
-        const shareText =
-          `Blind Geoguessr\n` +
-          `${grid}\n` +
-          `Base Points: ${rawTotalScore.toLocaleString()}\n` +
-          `Synergy Combo: x${globalSynergy.toFixed(2)}\n` +
-          `Final Score: ${finalScore.toLocaleString()}\n` +
-          `Play here: https://avandy-geo.github.io/blind-geoguessr/\n`;
-
-        copyTextToClipboard(shareText);
-      }
-
-      function shareResults() {
         const finalScore = Math.floor(rawTotalScore * globalSynergy);
         const roundLines = roundData
           .map((r) => {
@@ -2000,7 +2395,8 @@
           `Blind Geoguessr\n` +
           `${roundLines}\n\n` +
           `Base Points: ${rawTotalScore.toLocaleString()}\n` +
-          `Combo: x${globalSynergy.toFixed(2)}\n` +
+          `${formatComboBreakdown()}\n` +
+          `Total Combo: x${globalSynergy.toFixed(2)}\n` +
           `Final Score: ${finalScore.toLocaleString()}\n` +
           `Play here: https://avandy-geo.github.io/blind-geoguessr/\n`;
 
@@ -2082,28 +2478,107 @@
         return response.json();
       }
 
+      // function normalizeLeaderboardRows(rows) {
+      //   const filledRows = Array.isArray(rows) ? rows.slice(0, 10) : [];
+      //   while (filledRows.length < 10) {
+      //     filledRows.push(null);
+      //   }
+      //   return filledRows;
+      // }
+
       function normalizeLeaderboardRows(rows) {
-        const filledRows = Array.isArray(rows) ? rows.slice(0, 10) : [];
-        while (filledRows.length < 10) {
-          filledRows.push(null);
-        }
-        return filledRows;
+        return Array.isArray(rows) ? rows : [];
       }
 
       function renderLeaderboardRows(rows) {
         leaderboardBody.innerHTML = "";
         normalizeLeaderboardRows(rows).forEach((row, index) => {
-          const tr = document.createElement("tr");
           const rank = index + 1;
+          const hasRoundDetails = Boolean(row && getLeaderboardRoundLines(row));
+
+          // Setup the display name with a safety fallback for missing names
+          let displayName = "";
+          if (row) {
+            const rawName = row.player_name || ""; // Prevents crash if name is missing
+            displayName = escapeHtml(rawName);
+            if (
+              playerName &&
+              rawName &&
+              rawName.toLowerCase() === playerName.toLowerCase()
+            ) {
+              displayName +=
+                ' <strong style="color: var(--primary); font-size: 0.85em;">(You)</strong>';
+            }
+          }
+
+          const tr = document.createElement("tr");
           tr.innerHTML = `
-                    <td>${rank}</td>
-                    <td>${row ? escapeHtml(row.player_name) : ""}</td>
-                    <td class="leaderboard-score">${row ? Number(row.score).toLocaleString() : ""}</td>
-                `;
+                          <td>${rank}</td>
+                          <td>${displayName}</td>
+                          <td class="leaderboard-score">${row ? Number(row.score).toLocaleString() : ""}</td>
+                          <td class="leaderboard-details-cell">
+                            ${row ? `<button class="leaderboard-toggle" type="button" ${hasRoundDetails ? "" : "disabled"} aria-expanded="false" aria-label="Show round summary">&#9662;</button>` : ""}
+                          </td>
+                      `;
           leaderboardBody.appendChild(tr);
+
+          if (!row) return;
+
+          const detailsTr = document.createElement("tr");
+          detailsTr.className = "leaderboard-round-details";
+          detailsTr.hidden = true;
+          detailsTr.innerHTML = `
+                          <td colspan="4">
+                            <div class="leaderboard-round-lines">${escapeHtml(getLeaderboardRoundLines(row) || "No round details saved for this score.")}</div>
+                          </td>
+                      `;
+          leaderboardBody.appendChild(detailsTr);
+
+          const toggle = tr.querySelector(".leaderboard-toggle");
+          if (toggle && hasRoundDetails) {
+            toggle.addEventListener("click", () => {
+              const isOpening = detailsTr.hidden;
+              detailsTr.hidden = !isOpening;
+              toggle.setAttribute("aria-expanded", String(isOpening));
+              toggle.innerHTML = isOpening ? "&#9652;" : "&#9662;";
+            });
+          }
         });
       }
 
+      function getLeaderboardRoundLines(row) {
+        const rounds = row?.game_data?.rounds;
+        if (!Array.isArray(rounds) || rounds.length === 0) return "";
+
+        return rounds
+          .map((round) => formatRoundShareLine(round))
+          .filter(Boolean)
+          .join("\n");
+      }
+
+      function formatRoundShareLine(round) {
+        const distanceKm = Math.round(
+          Number(round.distanceKm ?? round.dist ?? 0),
+        );
+        if (!Number.isFinite(distanceKm)) return "";
+
+        const parts = [
+          getDistanceShareSymbol(distanceKm),
+          `${distanceKm.toLocaleString()} km`,
+        ];
+
+        if (round.countryMatched) {
+          parts.push("\u2705");
+        } else if (round.continentMatched) {
+          parts.push("\u{1F30D}");
+        }
+
+        if ((round.shareComboAdded || 0) >= 3.0) {
+          parts.push("\u{1F525}");
+        }
+
+        return parts.join(" ");
+      }
       function escapeHtml(value) {
         const div = document.createElement("div");
         div.innerText = value;
@@ -2120,10 +2595,16 @@
         }
       }
 
+      // function saveLocalLeaderboard(rows) {
+      //   localStorage.setItem(
+      //     "blind-geoguessr-leaderboard",
+      //     JSON.stringify(rows.slice(0, 10)),
+      //   );
+      // }
       function saveLocalLeaderboard(rows) {
         localStorage.setItem(
           "blind-geoguessr-leaderboard",
-          JSON.stringify(rows.slice(0, 10)),
+          JSON.stringify(rows),
         );
       }
 
@@ -2195,6 +2676,13 @@
           finalScore,
           basePoints: rawTotalScore,
           comboMultiplier: Number(globalSynergy.toFixed(4)),
+          precisionComboTotal: Number(precisionComboTotal.toFixed(4)),
+          continentComboTotal: Number(continentComboTotal.toFixed(4)),
+          countryComboTotal: Number(countryComboTotal.toFixed(4)),
+          precisionMultiplier: Number(precisionMultiplier.toFixed(4)),
+          continentMultiplier: Number(continentMultiplier.toFixed(4)),
+          countryMultiplier: Number(countryMultiplier.toFixed(4)),
+          globalSynergy: Number(globalSynergy.toFixed(4)),
           createdAt: new Date().toISOString(),
           rounds: roundData.map((r, index) => ({
             round: index + 1,
@@ -2219,11 +2707,47 @@
             guessOpenOcean: Number(r.guessOpenOcean.toFixed(4)),
             comboAdded: Number(r.comboAdded.toFixed(4)),
             shareComboAdded: Number((r.shareComboAdded || 0).toFixed(4)),
+            precisionBaseAdded: Number((r.precisionBaseAdded || 0).toFixed(4)),
+            precisionConsistencyAdded: Number(
+              (r.precisionConsistencyAdded || 0).toFixed(4),
+            ),
+            precisionConsistencyTier: r.precisionConsistencyTier || "none",
+            continentBaseAdded: Number((r.continentBaseAdded || 0).toFixed(4)),
+            continentConsistencyAdded: Number(
+              (r.continentConsistencyAdded || 0).toFixed(4),
+            ),
+            countryBaseAdded: Number((r.countryBaseAdded || 0).toFixed(4)),
+            countryConsistencyAdded: Number(
+              (r.countryConsistencyAdded || 0).toFixed(4),
+            ),
             precisionComboAdded: Number(r.precisionComboAdded.toFixed(4)),
             continentComboAdded: Number(r.continentComboAdded.toFixed(4)),
             countryComboAdded: Number(r.countryComboAdded.toFixed(4)),
-            continentComboCount: r.continentComboCount,
-            countryComboCount: r.countryComboCount,
+            countrySizeMultiplier: Number(
+              (r.countrySizeMultiplier || 1).toFixed(4),
+            ),
+            countrySmallness: Number((r.countrySmallness || 0).toFixed(4)),
+            targetNeighborDensity: Number(
+              (r.targetNeighborDensity || 0).toFixed(4),
+            ),
+            isolationCrowdedPenalty: Number(
+              (r.isolationCrowdedPenalty || 1).toFixed(4),
+            ),
+            isolationUpside: Number((r.isolationUpside || 1).toFixed(4)),
+            precisionComboTotal: Number(
+              (r.precisionComboTotal || 0).toFixed(4),
+            ),
+            continentComboTotal: Number(
+              (r.continentComboTotal || 0).toFixed(4),
+            ),
+            countryComboTotal: Number((r.countryComboTotal || 0).toFixed(4)),
+            precisionMultiplier: Number(
+              (r.precisionMultiplier || 1).toFixed(4),
+            ),
+            continentMultiplier: Number(
+              (r.continentMultiplier || 1).toFixed(4),
+            ),
+            countryMultiplier: Number((r.countryMultiplier || 1).toFixed(4)),
           })),
         };
       }
@@ -2258,8 +2782,18 @@
         currentRound = 0;
         rawTotalScore = 0;
         globalSynergy = 1.0;
-        continentComboCount = 0;
-        countryComboCount = 0;
+        precisionComboTotal = 0;
+        continentComboTotal = 0;
+        countryComboTotal = 0;
+        precisionMultiplier = 1.0;
+        continentMultiplier = 1.0;
+        countryMultiplier = 1.0;
+        precisionEliteConsistencyCount = 0;
+        precisionGreatConsistencyCount = 0;
+        precisionTightConsistencyCount = 0;
+        precisionGoodConsistencyCount = 0;
+        continentConsistencyCount = 0;
+        countryConsistencyCount = 0;
         roundData = [];
         worldReady = false;
         usernameSubmitted = true;
